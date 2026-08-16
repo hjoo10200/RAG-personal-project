@@ -1,0 +1,23 @@
+{
+  "snapshot_date": "2026-08-14",
+  "timezone": "Asia/Seoul",
+  "role": "initial_implementation_baseline",
+  "authoritative_for_future_use": false,
+  "refresh_required_before_production": true,
+  "policy_count": 13,
+  "policies": [
+    {"category":"housing_cost","title":"서울 청년월세지원","agency":"서울특별시","file":"../originals/policies/seoul_youth_monthly_rent_notice_2026.pdf","document_file":"../documents/policies/seoul_youth_monthly_rent_notice_2026.txt","status_at_snapshot":"application_closed"},
+    {"category":"public_rental","title":"LH 서울 청년 매입임대주택","agency":"한국토지주택공사","file":"../originals/policies/lh_seoul_youth_purchase_rental_notice_2026_2nd.pdf","document_file":"../documents/policies/lh_seoul_youth_purchase_rental_notice_2026_2nd.txt","status_at_snapshot":"verify_in_notice"},
+    {"category":"housing_deposit_interest","title":"서울 청년 임차보증금 이자지원","agency":"서울특별시","document_file":"../documents/policies/seoul_youth_deposit_interest_support_2026.txt","status_at_snapshot":"standing_program"},
+    {"category":"moving_cost","title":"서울 청년 부동산 중개보수 및 이사비 지원","agency":"서울특별시","document_file":"../documents/policies/seoul_youth_moving_brokerage_support_2026.txt","status_at_snapshot":"verify_current_round"},
+    {"category":"deposit_protection","title":"서울 전세보증금 반환보증 보증료 지원","agency":"서울특별시","document_file":"../documents/policies/seoul_deposit_return_guarantee_fee_2026.txt","status_at_snapshot":"standing_program"},
+    {"category":"housing_loan","title":"청년전용 버팀목전세자금","agency":"국토교통부·주택도시기금","document_file":"../documents/policies/national_youth_jeonse_loan_2026.txt","status_at_snapshot":"standing_program"},
+    {"category":"asset_building","title":"서울 희망두배 청년통장","agency":"서울특별시","file":"../originals/policies/seoul_hope_double_youth_account_notice_2026.pdf","document_file":"../documents/policies/seoul_hope_double_youth_account_notice_2026.txt","status_at_snapshot":"application_closed"},
+    {"category":"job_search_living_support","title":"서울 청년수당","agency":"서울특별시","file":"../originals/policies/seoul_youth_allowance_notice_2026.pdf","document_file":"../documents/policies/seoul_youth_allowance_notice_2026.txt","status_at_snapshot":"application_closed"},
+    {"category":"employment_reengagement","title":"청년도전지원사업","agency":"고용노동부","document_file":"../documents/policies/work24_youth_challenge_2026.txt","status_at_snapshot":"local_schedule_check_required"},
+    {"category":"work_experience","title":"서울 미래청년일자리","agency":"서울특별시","document_file":"../documents/policies/seoul_future_youth_jobs_2026.txt","status_at_snapshot":"verify_current_round"},
+    {"category":"education_housing_cost","title":"주거안정장학금","agency":"한국장학재단","document_file":"../documents/policies/kosaf_housing_stability_scholarship_2026.txt","status_at_snapshot":"semester_schedule_check_required"},
+    {"category":"education_finance","title":"취업 후 상환 학자금대출","agency":"한국장학재단","document_file":"../documents/policies/kosaf_income_contingent_student_loan_2026.txt","status_at_snapshot":"semester_schedule_check_required"},
+    {"category":"newlywed_housing","title":"서울 신혼부부 임차보증금 이자지원","agency":"서울특별시","document_file":"../documents/policies/seoul_newlywed_deposit_interest_support_2026.txt","status_at_snapshot":"standing_program"}
+  ]
+}

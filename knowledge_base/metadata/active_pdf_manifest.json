@@ -1,0 +1,24 @@
+{
+  "snapshot_date": "2026-08-16",
+  "loader_glob": "knowledge_base/pdfs/**/*.pdf",
+  "document_count": 17,
+  "documents": [
+    {"file":"cases/busan_youth_regional_migration_cases_2021.pdf","role":"case","topic":["employment_move","education_move"],"source_pages":"157-205"},
+    {"file":"cases/transition_to_adulthood_independence_interviews_2022.pdf","role":"case","topic":["independence_transition","housing"],"source_pages":"153-174"},
+    {"file":"cases/youth_one_person_household_living_cost_2022.pdf","role":"case","topic":["living_cost","one_person_household"],"source_pages":"426-427"},
+    {"file":"cases/youth_housing_job_access_interviews_2023.pdf","role":"case","topic":["housing","job_access","region_choice"],"source_pages":"163-188"},
+    {"file":"cases/youth_policy_access_interviews_2026.pdf","role":"case","topic":["policy_discovery","application_barrier"],"source_pages":"64-81"},
+    {"file":"cases/youth_one_person_living_risk_interviews_2023.pdf","role":"case","topic":["job_search","income_gap","one_person_household"],"source_pages":"353-416"},
+    {"file":"guides/easylaw_moving_guide_2026.pdf","role":"guide","topic":["moving","moving_contract"]},
+    {"file":"guides/financial_life_guide_young_adults_2026.pdf","role":"guide","topic":["budget","finance","debt"]},
+    {"file":"guides/housing_lease_protection_guide_2020.pdf","role":"guide","topic":["lease","deposit_protection"]},
+    {"file":"guides/standard_housing_lease_contract_2023.pdf","role":"guide","topic":["lease_contract","special_terms"]},
+    {"file":"policies/lh_seoul_youth_purchase_rental_notice_2026_2nd.pdf","role":"policy","topic":["public_rental","housing"],"source_pages":"14-16,28-31","requires_current_check":true},
+    {"file":"policies/seoul_hope_double_youth_account_notice_2026.pdf","role":"policy","topic":["asset_building"],"requires_current_check":true},
+    {"file":"policies/seoul_youth_allowance_notice_2026.pdf","role":"policy","topic":["job_search","living_support"],"requires_current_check":true},
+    {"file":"policies/seoul_youth_monthly_rent_faq_2026.pdf","role":"policy","topic":["monthly_rent","eligibility_faq"],"requires_current_check":true},
+    {"file":"policies/seoul_youth_monthly_rent_notice_2026.pdf","role":"policy","topic":["monthly_rent","housing_cost"],"requires_current_check":true},
+    {"file":"policies/seoul_youth_moving_brokerage_support_2026.pdf","role":"policy","topic":["moving_cost","brokerage_fee"],"requires_current_check":true},
+    {"file":"policies/kosaf_housing_stability_scholarship_plan_2026.pdf","role":"policy","topic":["education_move","housing_cost","scholarship"],"requires_current_check":true}
+  ]
+}
