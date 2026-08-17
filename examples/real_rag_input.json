@@ -1,0 +1,13 @@
+{
+  "situation": {
+    "purpose": "취업",
+    "current_region": "경기도 수원시",
+    "target_region": "서울특별시",
+    "monthly_income_krw": 2200000,
+    "available_cash_krw": 10000000,
+    "move_timeline": "3개월 이내",
+    "housing_preference": "월세",
+    "priorities": ["통근시간", "월 고정비", "안전"],
+    "additional_context": "첫 자취이며 보증금과 월 생활비 수준을 가장 걱정하고 있다."
+  }
+}

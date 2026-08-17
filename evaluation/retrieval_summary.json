@@ -1,0 +1,33 @@
+{
+  "generated_at": "2026-08-17T14:14:46+09:00",
+  "overall": {
+    "questions": 15,
+    "source_hit_passes": 13,
+    "source_hit_rate": 0.8667,
+    "mean_expected_source_recall": 0.8667,
+    "mean_reciprocal_rank": 0.9222
+  },
+  "by_corpus": {
+    "guides": {
+      "questions": 5,
+      "source_hit_passes": 5,
+      "source_hit_rate": 1.0,
+      "mean_expected_source_recall": 0.9,
+      "mean_reciprocal_rank": 1.0
+    },
+    "cases": {
+      "questions": 5,
+      "source_hit_passes": 5,
+      "source_hit_rate": 1.0,
+      "mean_expected_source_recall": 0.9,
+      "mean_reciprocal_rank": 0.9
+    },
+    "policies": {
+      "questions": 5,
+      "source_hit_passes": 3,
+      "source_hit_rate": 0.6,
+      "mean_expected_source_recall": 0.8,
+      "mean_reciprocal_rank": 0.8667
+    }
+  }
+}

@@ -37,6 +37,21 @@
 .venv\Scripts\python.exe -m src.search "이사업체를 처음 고를 때 방문견적과 계약서에서 무엇을 비교해야 하나요?" --corpus guides -k 3
 ```
 
+## 전체 자동 실행
+
+15개 질문을 한 번에 실행하려면 프로젝트 루트에서 다음 명령을 사용한다.
+
+```powershell
+.venv\Scripts\python.exe -m src.evaluate_retrieval
+```
+
+임베딩 모델과 세 PGVector 컬렉션 연결을 한 번씩만 초기화한 뒤 모든 질문을 처리한다. 결과는 다음 파일에 저장된다.
+
+- `evaluation/retrieval_results.csv`: 질문별 상위 문서·페이지·거리·본문 미리보기
+- `evaluation/retrieval_summary.json`: 전체 및 corpus별 Source Hit, 기대 문서 회수율, MRR
+
+자동 평가는 기대 PDF의 검색 순위만 채점한다. 청크가 실제 답변 근거를 충분히 포함하는지는 CSV의 `rankN_preview`를 읽고 아래의 0~2점 기준으로 별도 판정한다.
+
 ## 질문별 판정
 
 각 질문은 다음 순서로 평가한다.

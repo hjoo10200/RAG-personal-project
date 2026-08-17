@@ -1,0 +1,51 @@
+{
+  "situation": {
+    "purpose": "취업",
+    "current_region": "경기도 수원시",
+    "target_region": "서울특별시",
+    "monthly_income_krw": 2200000,
+    "available_cash_krw": 10000000,
+    "move_timeline": "3개월 이내",
+    "housing_preference": "월세",
+    "priorities": ["통근시간", "월 고정비", "안전"],
+    "additional_context": "첫 자취이며 보증금과 월 생활비 수준을 가장 걱정하고 있다."
+  },
+  "retrieved_context": [
+    {
+      "corpus": "guides",
+      "source_file": "TEST_GUIDE.pdf",
+      "page_number": 10,
+      "content": "시험용 근거: 월 예산을 주거비, 식비, 교통비, 공과금, 비상금으로 구분해 작성한다."
+    },
+    {
+      "corpus": "guides",
+      "source_file": "TEST_HOUSING_GUIDE.pdf",
+      "page_number": 12,
+      "content": "시험용 근거: 계약 전에는 등기사항증명서의 소유자와 계약 상대방이 일치하는지 확인하고, 보증금·월세·관리비 항목과 수리 책임을 계약서에 명확히 적는다. 입주 전에는 기존 하자를 사진으로 남겨 임대인과 공유한다."
+    },
+    {
+      "corpus": "guides",
+      "source_file": "TEST_MOVING_GUIDE.pdf",
+      "page_number": 7,
+      "content": "시험용 근거: 이사 전에는 여러 업체의 견적과 포함 작업을 비교하고, 이사 당일에는 계량기와 시설 상태를 기록한다. 입주 직후에는 전입 관련 행정절차와 공과금 명의 변경 여부를 확인한다."
+    },
+    {
+      "corpus": "guides",
+      "source_file": "TEST_SAFETY_GUIDE.pdf",
+      "page_number": 5,
+      "content": "시험용 근거: 입주 전 출입문과 창문의 잠금 상태, 화재감지기와 피난 경로를 확인하고, 계약서·이체내역·하자 사진을 함께 보관한다. 첫 달에는 실제 지출을 기록해 계획 예산과 비교한다."
+    },
+    {
+      "corpus": "cases",
+      "source_file": "TEST_CASE.pdf",
+      "page_number": 4,
+      "content": "시험용 근거: 월 소득 220만 원인 사례자는 주거비 65만 원, 식비 35만 원, 교통비 10만 원, 공과금 12만 원을 계획했다."
+    },
+    {
+      "corpus": "policies",
+      "source_file": "TEST_POLICY.pdf",
+      "page_number": 2,
+      "content": "시험용 근거: 정책 신청 전 공고문의 거주지, 연령, 소득, 임대차계약 요건과 제출기한을 확인해야 한다. 구체적인 지원금은 이 시험 근거에 제시되지 않았다."
+    }
+  ]
+}

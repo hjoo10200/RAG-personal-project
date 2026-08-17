@@ -91,6 +91,9 @@ class IngestSettings:
     )
     embedding_device: str = os.getenv("EMBEDDING_DEVICE", "cpu")
     embedding_batch_size: int = int(os.getenv("EMBEDDING_BATCH_SIZE", "8"))
+    embedding_local_files_only: bool = os.getenv(
+        "EMBEDDING_LOCAL_FILES_ONLY", "true"
+    ).lower() in {"1", "true", "yes"}
     database_url: str = os.getenv(
         "PGVECTOR_URL",
         "postgresql+psycopg://admin:admin123@localhost:5432/vectordb",
@@ -124,3 +127,39 @@ class IngestSettings:
     @property
     def psycopg_url(self) -> str:
         return self.database_url.replace("postgresql+psycopg://", "postgresql://", 1)
+
+
+@dataclass(frozen=True)
+class GenerationSettings:
+    """Groq report-generation settings."""
+
+    api_key: str = os.getenv("GROQ_API_KEY", "")
+    model: str = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+    temperature: float = float(os.getenv("GROQ_TEMPERATURE", "0"))
+    max_tokens: int = int(os.getenv("GROQ_MAX_TOKENS", "3500"))
+    timeout_seconds: float = float(os.getenv("GROQ_TIMEOUT_SECONDS", "120"))
+    max_retries: int = int(os.getenv("GROQ_MAX_RETRIES", "2"))
+    reasoning_effort: str = os.getenv("GROQ_REASONING_EFFORT", "low")
+
+    def validate(self) -> None:
+        if not self.api_key or self.api_key.lower().startswith("your_"):
+            raise ValueError(
+                "GROQ_API_KEY가 설정되지 않았습니다. .env에 Groq API 키를 입력하세요."
+            )
+        if self.model != "openai/gpt-oss-120b":
+            raise ValueError(
+                "이번 프로젝트의 보고서 생성 모델은 "
+                "openai/gpt-oss-120b로 고정합니다."
+            )
+        if not 0 <= self.temperature <= 2:
+            raise ValueError("GROQ_TEMPERATURE는 0 이상 2 이하여야 합니다.")
+        if self.max_tokens <= 0:
+            raise ValueError("GROQ_MAX_TOKENS는 1 이상이어야 합니다.")
+        if self.timeout_seconds <= 0:
+            raise ValueError("GROQ_TIMEOUT_SECONDS는 0보다 커야 합니다.")
+        if self.max_retries < 0:
+            raise ValueError("GROQ_MAX_RETRIES는 0 이상이어야 합니다.")
+        if self.reasoning_effort not in {"low", "medium", "high"}:
+            raise ValueError(
+                "GROQ_REASONING_EFFORT는 low, medium, high 중 하나여야 합니다."
+            )
