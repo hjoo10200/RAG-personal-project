@@ -8,11 +8,28 @@ RAG 적재 대상은 다음 경로의 PDF 17개다.
 knowledge_base/pdfs/**/*.pdf
 ```
 
-세부 문서 구성과 품질 기준은 [`knowledge_base/README.md`](./knowledge_base/README.md)를 참고한다. 이전 주제 자료는 `previous_projects/`에 보관한다.
+세부 문서 구성과 품질 기준은 [`knowledge_base/README.md`](./knowledge_base/README.md)를 참고한다. 현재 적재 대상에서 제외한 이전 자료는 `knowledge_base/archive/`에 보관한다.
+
+## 프로젝트 구조
+
+```text
+src/
+├─ common/       # 임베딩과 PGVector 공통 연결
+├─ ingestion/    # PDF 로딩, 청킹, 벡터 DB 적재
+├─ retrieval/    # 검색, 평가, RAG 근거 구성
+├─ generation/   # Groq 보고서 생성과 출력 스키마
+├─ config.py     # 환경설정
+└─ run_rag.py    # 검색부터 보고서 생성까지의 실행 진입점
+knowledge_base/  # 원본 PDF, 메타데이터, 보관 자료
+evaluation/      # 검색 질문과 평가 결과
+examples/inputs/ # 실행 예제 JSON
+docs/            # 실행·Git 가이드와 구현 보고서
+storage/         # 실행 중 생성되는 결과물
+```
 
 ## 벡터 DB 적재
 
-PDF는 용도에 따라 `guides`, `cases`, `policies` 세 PGVector 컬렉션으로 분리한다. 직접 실행할 명령과 검증 순서는 [`CORPUS_INGESTION_GUIDE.md`](./CORPUS_INGESTION_GUIDE.md)를 참고한다.
+PDF는 용도에 따라 `guides`, `cases`, `policies` 세 PGVector 컬렉션으로 분리한다. 직접 실행할 명령과 검증 순서는 [PDF 적재 가이드](docs/guides/CORPUS_INGESTION_GUIDE.md)를 참고한다.
 
 검색 품질 검증에는 [`evaluation/retrieval_questions.jsonl`](./evaluation/retrieval_questions.jsonl)의 대표 질문 15개와 [`evaluation/retrieval_results.csv`](./evaluation/retrieval_results.csv) 기록 양식을 사용한다.
 
@@ -20,6 +37,6 @@ PDF는 용도에 따라 `guides`, `cases`, `policies` 세 PGVector 컬렉션으�
 
 ## 구조화 보고서 생성
 
-Groq `openai/gpt-oss-120b` 연결과 종합 보고서 JSON 생성의 1단계 시험 방법은 [`GENERATION_STEP_1.md`](./GENERATION_STEP_1.md)를 참고한다. 현재 단계는 검색 결과 자동 연결과 HTML/PDF 렌더링 전의 독립 생성 시험이다.
+Groq `openai/gpt-oss-120b` 연결과 종합 보고서 JSON 생성의 1단계 시험 방법은 [생성 단계 검증 가이드](docs/guides/GENERATION_STEP_1.md)를 참고한다. 현재 단계는 검색 결과 자동 연결과 HTML/PDF 렌더링 전의 독립 생성 시험이다.
 
-실제 PGVector 검색 결과를 Groq 보고서 생성에 연결하는 전체 RAG 실행 방법은 [`REAL_RAG_RUN_GUIDE.md`](./REAL_RAG_RUN_GUIDE.md)를 참고한다. 이 실행 경로는 `TEST_*` 합성 문서를 사용하지 않는다.
+실제 PGVector 검색 결과를 Groq 보고서 생성에 연결하는 전체 RAG 실행 방법은 [실제 RAG 실행 가이드](docs/guides/REAL_RAG_RUN_GUIDE.md)를 참고한다. 이 실행 경로는 `TEST_*` 합성 문서를 사용하지 않는다. 전체 문서 목록은 [문서 인덱스](docs/README.md)에 정리되어 있다.

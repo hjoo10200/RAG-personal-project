@@ -9,7 +9,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
 
 from src.config import GenerationSettings
-from src.report_schema import GenerationRequest, NarrativeDraft, NarrativeReport
+from src.generation.report_schema import GenerationRequest, NarrativeDraft, NarrativeReport
 
 
 SYSTEM_PROMPT = """

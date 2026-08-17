@@ -50,11 +50,11 @@
 | 파일 | 역할 |
 |---|---|
 | `src/config.py` | 환경변수와 경로, 청킹·DB 설정 관리 |
-| `src/pdf_pipeline.py` | PDF 탐색, 페이지 로딩, 메타데이터, 청킹, ID 생성 |
-| `src/embedding_factory.py` | Hugging Face 임베딩 모델과 배치 설정 |
-| `src/vector_store.py` | DB 사전 확인, PGVector 적재, 저장 건수 검증 |
-| `src/ingest.py` | 전체 적재 흐름을 실행하는 CLI 진입점 |
-| `src/search.py` | 기존 컬렉션을 보존한 채 유사도 검색을 시험하는 CLI |
+| `src/ingestion/pdf_pipeline.py` | PDF 탐색, 페이지 로딩, 메타데이터, 청킹, ID 생성 |
+| `src/common/embedding_factory.py` | Hugging Face 임베딩 모델과 배치 설정 |
+| `src/common/vector_store.py` | DB 사전 확인, PGVector 적재, 저장 건수 검증 |
+| `src/ingestion/ingest.py` | 전체 적재 흐름을 실행하는 CLI 진입점 |
+| `src/retrieval/search.py` | 기존 컬렉션을 보존한 채 유사도 검색을 시험하는 CLI |
 | `compose.yaml` | PostgreSQL 16과 pgvector 실행 환경 |
 | `.env.example` | 노출 가능한 설정 예시 |
 
@@ -64,9 +64,9 @@
 
 ```powershell
 docker compose up -d
-.venv\Scripts\python.exe -m src.ingest --dry-run
-.venv\Scripts\python.exe -m src.ingest
-.venv\Scripts\python.exe -m src.search "전세계약 전에 무엇을 확인해야 하나요?" -k 3
+.venv\Scripts\python.exe -m src.ingestion.ingest --dry-run
+.venv\Scripts\python.exe -m src.ingestion.ingest
+.venv\Scripts\python.exe -m src.retrieval.search "전세계약 전에 무엇을 확인해야 하나요?" -k 3
 ```
 
 `--dry-run`은 PDF 로딩과 청킹까지만 검사하므로 모델 다운로드나 DB가 필요하지 않다.

@@ -8,9 +8,9 @@ from dataclasses import dataclass
 from langchain_core.documents import Document
 
 from src.config import CORPUS_NAMES, IngestSettings
-from src.embedding_factory import create_embeddings
-from src.report_schema import GenerationRequest, RetrievedEvidence, UserSituation
-from src.vector_store import check_database, count_collection_rows, open_collection
+from src.common.embedding_factory import create_embeddings
+from src.common.vector_store import check_database, count_collection_rows, open_collection
+from src.generation.report_schema import GenerationRequest, RetrievedEvidence, UserSituation
 
 
 MAX_CHARS_PER_CHUNK = 450

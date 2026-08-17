@@ -43,15 +43,15 @@ docker compose ps
 전체 PDF를 확인하려면 다음 명령을 실행한다.
 
 ```powershell
-.venv\Scripts\python.exe -m src.ingest --corpus all --dry-run
+.venv\Scripts\python.exe -m src.ingestion.ingest --corpus all --dry-run
 ```
 
 각 그룹을 따로 확인할 수도 있다.
 
 ```powershell
-.venv\Scripts\python.exe -m src.ingest --corpus guides --dry-run
-.venv\Scripts\python.exe -m src.ingest --corpus cases --dry-run
-.venv\Scripts\python.exe -m src.ingest --corpus policies --dry-run
+.venv\Scripts\python.exe -m src.ingestion.ingest --corpus guides --dry-run
+.venv\Scripts\python.exe -m src.ingestion.ingest --corpus cases --dry-run
+.venv\Scripts\python.exe -m src.ingestion.ingest --corpus policies --dry-run
 ```
 
 ## 3. PDF 전체 적재
@@ -59,7 +59,7 @@ docker compose ps
 세 컬렉션을 한 번에 순차 적재하려면 다음 명령을 실행한다.
 
 ```powershell
-.venv\Scripts\python.exe -m src.ingest --corpus all
+.venv\Scripts\python.exe -m src.ingestion.ingest --corpus all
 ```
 
 처리 순서는 `guides → cases → policies`다. 임베딩 모델은 처음에 한 번만 메모리에 로드하고 세 컬렉션에서 재사용한다.
@@ -67,9 +67,9 @@ docker compose ps
 개별 컬렉션만 다시 만들고 싶다면 다음 중 하나만 실행한다.
 
 ```powershell
-.venv\Scripts\python.exe -m src.ingest --corpus guides
-.venv\Scripts\python.exe -m src.ingest --corpus cases
-.venv\Scripts\python.exe -m src.ingest --corpus policies
+.venv\Scripts\python.exe -m src.ingestion.ingest --corpus guides
+.venv\Scripts\python.exe -m src.ingestion.ingest --corpus cases
+.venv\Scripts\python.exe -m src.ingestion.ingest --corpus policies
 ```
 
 적재 명령은 선택한 컬렉션을 삭제한 뒤 새로 만든다. 예를 들어 `--corpus cases`는 `youth_independence_cases`만 재구축하며 `guides`와 `policies` 컬렉션에는 영향을 주지 않는다.
@@ -87,25 +87,25 @@ docker compose ps
 가이드 검색:
 
 ```powershell
-.venv\Scripts\python.exe -m src.search "전세계약 전에 확인할 사항" --corpus guides -k 3
+.venv\Scripts\python.exe -m src.retrieval.search "전세계약 전에 확인할 사항" --corpus guides -k 3
 ```
 
 사례 검색:
 
 ```powershell
-.venv\Scripts\python.exe -m src.search "취업 때문에 서울로 이사한 청년의 자취 사례" --corpus cases -k 3
+.venv\Scripts\python.exe -m src.retrieval.search "취업 때문에 서울로 이사한 청년의 자취 사례" --corpus cases -k 3
 ```
 
 정책 검색:
 
 ```powershell
-.venv\Scripts\python.exe -m src.search "서울 청년 월세 지원 신청 조건" --corpus policies -k 3
+.venv\Scripts\python.exe -m src.retrieval.search "서울 청년 월세 지원 신청 조건" --corpus policies -k 3
 ```
 
 세 컬렉션을 같은 질의로 각각 검색:
 
 ```powershell
-.venv\Scripts\python.exe -m src.search "취업을 위해 서울에서 처음 독립하려면 무엇을 준비해야 하나요?" --corpus all -k 3
+.venv\Scripts\python.exe -m src.retrieval.search "취업을 위해 서울에서 처음 독립하려면 무엇을 준비해야 하나요?" --corpus all -k 3
 ```
 
 `--corpus all -k 3`은 결과를 합쳐서 3개만 반환하는 것이 아니라 각 컬렉션에서 최대 3개씩 반환한다.
@@ -168,7 +168,7 @@ PostgreSQL text fields cannot contain NUL (0x00) bytes
 이 오류로 적재가 중단됐다면 실패한 corpus만 다시 실행하면 된다. 예를 들어 `cases` 적재 중 실패했다면 다음 명령을 사용한다.
 
 ```powershell
-.venv\Scripts\python.exe -m src.ingest --corpus cases
+.venv\Scripts\python.exe -m src.ingestion.ingest --corpus cases
 ```
 
 선택한 컬렉션은 실행 시 새로 구축되므로 실패 당시의 불완전한 `cases` 데이터를 별도로 삭제할 필요는 없다.

@@ -8,9 +8,9 @@ import time
 from langchain_core.embeddings import Embeddings
 
 from src.config import CORPUS_NAMES, IngestSettings
-from src.embedding_factory import create_embeddings
-from src.pdf_pipeline import discover_pdfs, load_pdf_pages, split_pages
-from src.vector_store import check_database, count_collection_rows, rebuild_collection
+from src.common.embedding_factory import create_embeddings
+from src.common.vector_store import check_database, count_collection_rows, rebuild_collection
+from src.ingestion.pdf_pipeline import discover_pdfs, load_pdf_pages, split_pages
 
 
 def parse_args() -> argparse.Namespace:

@@ -8,7 +8,7 @@
 cd D:\RAG-personal-project
 
 .venv\Scripts\python.exe -m src.run_rag `
-  --input examples\real_rag_input.json `
+  --input examples\inputs\real_rag_input.json `
   --output storage\generated_reports\real_rag_report.json `
   --evidence-output storage\generated_reports\real_rag_evidence.json `
   --retrieve-only
@@ -18,7 +18,7 @@ cd D:\RAG-personal-project
 
 ```powershell
 .venv\Scripts\python.exe -m src.run_rag `
-  --input examples\real_rag_input.json `
+  --input examples\inputs\real_rag_input.json `
   --output storage\generated_reports\real_rag_report.json `
   --evidence-output storage\generated_reports\real_rag_evidence.json
 ```

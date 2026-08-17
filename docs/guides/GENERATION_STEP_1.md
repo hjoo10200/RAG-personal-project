@@ -9,7 +9,7 @@
   -> 제목과 하나의 Markdown 본문을 담은 NarrativeReport JSON
 ```
 
-`examples/generation_smoke_input.json`의 `TEST_*.pdf` 내용은 API 연결과 구조 검증만을 위한 합성 데이터이며 실제 정책 정보가 아니다.
+`examples/inputs/generation_smoke_input.json`의 `TEST_*.pdf` 내용은 API 연결과 구조 검증만을 위한 합성 데이터이며 실제 정책 정보가 아니다.
 
 ## 1. API 키 입력
 
@@ -25,22 +25,22 @@ GROQ_API_KEY=gsk_...
 
 ```powershell
 cd D:\RAG-personal-project
-.venv\Scripts\python.exe -m src.generate_report `
-  --input examples\generation_smoke_input.json `
+.venv\Scripts\python.exe -m src.generation.generate_report `
+  --input examples\inputs\generation_smoke_input.json `
   --validate-input
 ```
 
 API 키를 입력한 뒤 모델 설정도 확인한다.
 
 ```powershell
-.venv\Scripts\python.exe -m src.generate_report --check-config
+.venv\Scripts\python.exe -m src.generation.generate_report --check-config
 ```
 
 ## 3. 실제 구조화 생성 시험
 
 ```powershell
-.venv\Scripts\python.exe -m src.generate_report `
-  --input examples\generation_smoke_input.json `
+.venv\Scripts\python.exe -m src.generation.generate_report `
+  --input examples\inputs\generation_smoke_input.json `
   --output storage\generated_reports\smoke_report.json
 ```
 

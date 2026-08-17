@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from src.config import CORPUS_NAMES, PROJECT_ROOT, IngestSettings
-from src.embedding_factory import create_embeddings
-from src.vector_store import (
+from src.common.embedding_factory import create_embeddings
+from src.common.vector_store import (
     check_database,
     count_collection_rows,
     open_collection,

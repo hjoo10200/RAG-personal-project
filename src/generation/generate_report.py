@@ -10,8 +10,8 @@ from groq import GroqError
 from pydantic import ValidationError
 
 from src.config import GenerationSettings
-from src.report_generator import create_report_model, generate_narrative_report
-from src.report_schema import GenerationRequest, NarrativeDraft, NarrativeReport
+from src.generation.report_generator import create_report_model, generate_narrative_report
+from src.generation.report_schema import GenerationRequest, NarrativeDraft, NarrativeReport
 
 
 def parse_args() -> argparse.Namespace:

@@ -5,8 +5,8 @@ from __future__ import annotations
 import argparse
 
 from src.config import CORPUS_NAMES, IngestSettings
-from src.embedding_factory import create_embeddings
-from src.vector_store import check_database, open_collection
+from src.common.embedding_factory import create_embeddings
+from src.common.vector_store import check_database, open_collection
 
 
 def parse_args() -> argparse.Namespace:

@@ -9,9 +9,9 @@ from pathlib import Path
 from groq import GroqError
 from pydantic import ValidationError
 
-from src.report_generator import generate_narrative_report
-from src.report_schema import RagRequest
-from src.rag_pipeline import retrieve_real_evidence
+from src.generation.report_generator import generate_narrative_report
+from src.generation.report_schema import RagRequest
+from src.retrieval.rag_pipeline import retrieve_real_evidence
 
 
 def parse_args() -> argparse.Namespace:
