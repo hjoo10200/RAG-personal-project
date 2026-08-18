@@ -1,6 +1,10 @@
 {
   "situation": {
     "purpose": "취업",
+    "age": 27,
+    "employment_status": "재직 중",
+    "education_status": "대학교 졸업",
+    "is_homeowner": false,
     "current_region": "경기도 수원시",
     "target_region": "서울특별시",
     "monthly_income_krw": 2200000,

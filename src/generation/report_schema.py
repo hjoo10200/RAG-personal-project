@@ -16,6 +16,12 @@ class StrictModel(BaseModel):
 
 class UserSituation(StrictModel):
     purpose: str = Field(description="독립 목적")
+    age: int = Field(ge=0, le=120, description="사용자 만 나이")
+    employment_status: str = Field(description="재직·구직 등 현재 고용 상태")
+    education_status: str = Field(description="재학·졸업 등 현재 학업 상태")
+    is_homeowner: bool | None = Field(
+        description="본인 명의 주택 보유 여부, 모르는 경우 null"
+    )
     current_region: str = Field(description="현재 거주 지역")
     target_region: str = Field(description="희망 독립 지역")
     monthly_income_krw: int = Field(ge=0, description="월 소득(원)")

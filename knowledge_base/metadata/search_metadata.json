@@ -1,0 +1,79 @@
+{
+  "documents": {
+    "busan_youth_regional_migration_cases_2021.pdf": {
+      "document_title": "부산 청년 지역이동 사례",
+      "search_keywords": ["취업 지역이동", "진학 지역이동", "월세 부담", "본가 복귀", "재이동"]
+    },
+    "transition_to_adulthood_independence_interviews_2022.pdf": {
+      "document_title": "성인 이행기 청년 자립 당사자 면접",
+      "search_keywords": ["청년 자립", "독립 지연", "부모 동거", "가족 지원", "불안정 소득"]
+    },
+    "youth_one_person_household_living_cost_2022.pdf": {
+      "document_title": "청년 1인 가구 생활비 조사",
+      "search_keywords": ["1인 가구 생활비", "월세", "관리비", "공과금", "식비", "교통비"]
+    },
+    "youth_housing_job_access_interviews_2023.pdf": {
+      "document_title": "청년 주거와 일자리 접근성 면접",
+      "search_keywords": ["수도권 주거", "일자리 접근성", "통근시간", "교통비", "주거비"]
+    },
+    "youth_policy_access_interviews_2026.pdf": {
+      "document_title": "청년 정책정보 접근과 신청 장벽 면접",
+      "search_keywords": ["정책 정보 경로", "홈페이지", "신청 장벽", "담당자 도움", "신청 포기"]
+    },
+    "youth_one_person_living_risk_interviews_2023.pdf": {
+      "document_title": "청년 1인 가구 생활위험 면접",
+      "search_keywords": ["구직", "소득 공백", "경제적 위험", "1인 가구", "생활비 부담"]
+    },
+    "easylaw_moving_guide_2026.pdf": {
+      "document_title": "찾기쉬운 생활법령 이사하기 이사업체 안내",
+      "search_keywords": ["이사업체", "방문견적", "운송계약", "허가", "피해배상보험", "파손", "분실"]
+    },
+    "financial_life_guide_young_adults_2026.pdf": {
+      "document_title": "사회초년생을 위한 금융생활 가이드",
+      "search_keywords": ["월 생활비", "고정지출", "변동지출", "비정기지출", "비상자금", "예산"]
+    },
+    "housing_lease_protection_guide_2020.pdf": {
+      "document_title": "주택임대차보호법 해설집",
+      "search_keywords": ["묵시적 갱신", "계약갱신요구권", "보증금", "우선변제권", "임대차"]
+    },
+    "standard_housing_lease_contract_2023.pdf": {
+      "document_title": "주택임대차표준계약서",
+      "search_keywords": ["등기사항증명서", "임대차계약", "특약", "수리", "원상복구", "확정일자"]
+    },
+    "lh_seoul_youth_purchase_rental_notice_2026_2nd.pdf": {
+      "document_title": "2026년 2차 서울지역 청년 매입임대주택 입주자 모집공고",
+      "policy_name": "LH 청년 매입임대주택",
+      "search_keywords": ["LH 청년 매입임대", "공공임대", "무주택 청년", "입주 순위", "임대조건", "제출서류"]
+    },
+    "seoul_hope_double_youth_account_notice_2026.pdf": {
+      "document_title": "2026년 희망두배 청년통장 신규 참가자 모집공고",
+      "policy_name": "서울 희망두배 청년통장",
+      "search_keywords": ["근로 청년 저축지원", "청년 자산형성", "저축 매칭", "희망두배 청년통장", "중복참여"]
+    },
+    "seoul_youth_allowance_notice_2026.pdf": {
+      "document_title": "2026년 서울 청년수당 참여자 모집공고",
+      "policy_name": "서울 청년수당",
+      "search_keywords": ["미취업 청년", "구직 청년", "생활비 지원", "청년수당", "중복참여"]
+    },
+    "seoul_youth_monthly_rent_faq_2026.pdf": {
+      "document_title": "2026년 서울시 청년월세지원 FAQ",
+      "policy_name": "서울 청년월세지원",
+      "search_keywords": ["청년 월세 지원", "건강보험 피부양자", "임차 조건", "소득 기준", "제출서류", "FAQ"]
+    },
+    "seoul_youth_monthly_rent_notice_2026.pdf": {
+      "document_title": "2026년 서울시 청년월세지원 모집공고",
+      "policy_name": "서울 청년월세지원",
+      "search_keywords": ["청년 월세 지원", "신청자격", "연령", "소득", "보증금", "월세", "모집공고"]
+    },
+    "seoul_youth_moving_brokerage_support_2026.pdf": {
+      "document_title": "2026년 서울 청년 부동산 중개보수 및 이사비 지원사업",
+      "policy_name": "서울 청년 부동산 중개보수 및 이사비 지원",
+      "search_keywords": ["중개보수 지원", "이사비 지원", "서울 청년", "증빙서류", "지원금액"]
+    },
+    "kosaf_housing_stability_scholarship_plan_2026.pdf": {
+      "document_title": "2026년 주거안정장학금 시행계획",
+      "policy_name": "한국장학재단 주거안정장학금",
+      "search_keywords": ["대학생 주거비", "원거리 통학", "주거안정장학금", "학자금 지원구간", "월세"]
+    }
+  }
+}

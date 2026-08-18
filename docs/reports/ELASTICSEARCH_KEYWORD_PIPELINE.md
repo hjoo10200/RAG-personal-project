@@ -139,9 +139,12 @@ evaluation/baselines/vector_only_2026-08-17/
 | `src/ingestion/elasticsearch.py` | 청크 생성부터 코퍼스별 Elasticsearch 인덱스 재구축까지 실행 |
 | `src/common/elasticsearch_store.py` | 클라이언트 생성, 매핑, 벌크 적재, BM25 질의와 응답 변환 |
 | `src/retrieval/keyword_search.py` | 사용자가 직접 키워드 검색을 실행하는 CLI |
-| `src/retrieval/evaluate_keyword_retrieval.py` | 기존 15개 질문으로 Keyword 검색을 자동 평가 |
+| `src/retrieval/keyword_query_builder.py` | 연령·지역·주거·고용·학업 상태에서 코퍼스별 하위 질의 생성 |
+| `src/retrieval/structured_keyword_search.py` | 실제 `RagRequest` JSON을 이용한 구조화 Keyword 검색 CLI |
+| `src/retrieval/evaluate_keyword_retrieval.py` | Keyword 전용 하위 질의 15개로 검색을 자동 평가 |
 | `evaluation/baselines/vector_only_2026-08-17/` | 변경하지 않는 Vector-only 비교 기준 |
-| `evaluation/keyword/` | Keyword 평가 실행 후 생성되는 결과 경로 |
+| `evaluation/keyword/` | 긴 자연어 질문을 사용했던 최초 Keyword 평가 기준선 |
+| `evaluation/keyword_structured/` | 개선된 구조화 Keyword 평가 결과 경로 |
 
 ## 5. Elasticsearch 실행 환경
 
@@ -266,6 +269,9 @@ sequenceDiagram
   "corpus": "policies",
   "page_number": 12,
   "chunk_id": "SHA-256 문자열",
+  "document_title": "2026년 서울시 청년월세지원 모집공고",
+  "policy_name": "서울 청년월세지원",
+  "keywords": ["청년 월세 지원", "신청자격", "소득", "보증금"],
   "metadata": {
     "source": "knowledge_base/pdfs/policies/원본파일.pdf",
     "source_file": "원본파일.pdf",
@@ -287,18 +293,25 @@ sequenceDiagram
 | `corpus` | 필터·식별 | 문서 그룹 구분 |
 | `page_number` | 결과 표시 | 원문 페이지 추적 |
 | `chunk_id` | 중복 식별 | PGVector 청크와 동일한 청크 연결 가능 |
+| `document_title` | 높은 가중치 검색 | 영문 파일명 대신 사용하는 한국어 문서 제목 |
+| `policy_name` | 가장 높은 가중치 검색 | 공식 정책명과 서비스 입력 연결 |
+| `keywords` | 높은 가중치 검색 | 정책 별칭과 문서별 핵심 검색어 |
 | `metadata` | 검색하지 않음 | 원본 추적에 필요한 전체 메타데이터 보존 |
 
 `metadata`는 Elasticsearch 분석 대상에서 제외하지만 `_source`에는 보존한다.
 
 ## 11. BM25 매핑과 검색 방식
 
-플러그인 설치 없이 실행할 수 있도록 Elasticsearch 기본 `standard` tokenizer와 `lowercase` filter를 사용한다. `content`와 `source_file`은 텍스트 필드이며 `source_file.raw`에는 원본 파일명을 keyword 형식으로도 저장한다.
+플러그인 설치 없이 실행할 수 있도록 기본 `standard` 분석기와 2~15자 n-gram 보조 필드를 함께 사용한다. 공백이 정상인 본문은 `standard` 필드에서 검색하고, `허가받은이사업체`처럼 한국어가 붙어서 추출된 본문은 `content.ngram`이 `이사업체`, `방문견적` 같은 부분 문자열 회수를 보완한다.
+
+영문 `source_file` 외에 한국어 `document_title`, 공식 `policy_name`, 별칭과 핵심 용어인 `keywords`를 별도 필드에 적재한다. 가중치는 정책명, 한국어 제목, 키워드, 파일명, 본문, n-gram 본문 순으로 높게 설정한다.
 
 하나의 검색어에 대해 두 종류의 질의를 `should` 조건으로 실행한다.
 
-1. `match_phrase`는 본문에 검색 표현이 연속해서 등장하는 청크에 높은 가중치 3.0을 준다.
-2. `multi_match`는 본문과 파일명을 함께 검색하며 파일명에는 가중치 2.0을 준다.
+1. `match_phrase`는 본문과 한국어 제목·정책명에 검색 표현이 연속해서 등장할 때 높은 가중치를 준다.
+2. `multi_match`는 정책명, 제목, 키워드, 파일명, 기본 본문과 n-gram 본문을 함께 검색한다.
+3. 여러 구조화 하위 질의의 원시 BM25 점수를 직접 비교하지 않고 질의별 순위를 RRF로 결합한다.
+4. 동일 `chunk_id`는 하나로 합치고 최종 Top-K에서는 서로 다른 원본 PDF를 우선한다.
 
 Elasticsearch는 이 조건으로 BM25 점수를 계산한다. 점수가 높을수록 Keyword 검색에서 관련성이 높은 결과다.
 
@@ -343,24 +356,36 @@ BM25 점수와 PGVector 코사인 거리는 의미와 범위가 다르므로 직
 
 `--corpus all -k 3`은 전체에서 3개를 반환하는 것이 아니라 세 인덱스에서 각각 최대 3개를 반환한다.
 
+실제 서비스 입력에서는 수동 문장 검색보다 구조화 검색을 사용한다.
+
+```powershell
+.venv\Scripts\python.exe -m src.retrieval.structured_keyword_search `
+  --input examples\inputs\real_rag_input.json `
+  --corpus all `
+  -k 3
+```
+
+입력의 목표 지역, 주거 형태, 연령, 무주택 여부, 고용 상태와 학업 상태 중 각 코퍼스에 필요한 값만 선택한다. 예를 들어 월세·서울·재직 상태이면 청년월세지원, 중개보수·이사비, 희망두배 청년통장에 대한 별도 정책 하위 질의를 만든다. 이는 정책 자격을 규칙으로 판정하는 것이 아니라 검색 후보를 찾기 위한 query routing이다.
+
 ## 13. Keyword 자동 평가 입력
 
-평가 입력은 기존 Vector 평가와 동일한 파일이다.
+평가 입력은 Keyword 검색용으로 분리한 파일이다.
 
 ```text
-evaluation/retrieval_questions.jsonl
+evaluation/keyword_retrieval_questions.jsonl
 ```
 
 각 질문에는 다음 값이 포함된다.
 
 - 질문 ID
 - 검색할 코퍼스
-- 실제 검색 문장
+- 사용자가 원하는 정보의 짧은 설명
+- 구조화 입력에서 생성되는 것과 같은 `keyword_queries` 배열
 - 기대하는 원본 PDF 목록
 - 최소 기대 문서 적중 수
 - Top-K
 
-동일한 질문과 기대 문서를 사용하므로 Vector-only와 Keyword 결과를 직접 비교할 수 있다.
+기대 문서는 기존 Vector 평가와 동일하게 유지하되 검색 입력만 Keyword에 적합한 짧은 하위 질의로 분리한다. 따라서 긴 문장 작성 방식의 영향을 줄이고 Keyword 검색기가 정확한 용어와 정책명을 회수하는지를 평가한다.
 
 ## 14. Keyword 자동 평가 출력
 
@@ -373,7 +398,7 @@ evaluation/retrieval_questions.jsonl
 결과는 Vector 평가 파일과 다른 경로에 저장된다.
 
 ```text
-evaluation/keyword/
+evaluation/keyword_structured/
 ├─ retrieval_results.csv
 └─ retrieval_summary.json
 ```
@@ -385,7 +410,8 @@ CSV에는 질문별로 다음 값이 저장된다.
 - 첫 기대 문서 순위
 - Reciprocal Rank
 - 순위별 원본 PDF와 페이지
-- 순위별 BM25 점수
+- 순위별 하위 질의 RRF 점수와 최고 BM25 점수
+- 각 청크가 적중한 하위 질의
 - 청크 본문 미리보기
 
 JSON에는 전체 및 코퍼스별 Source Hit 비율, 기대 문서 평균 회수율과 MRR이 저장된다.
@@ -434,8 +460,11 @@ docker compose ps
 Vector-only 기준선
 evaluation/baselines/vector_only_2026-08-17/retrieval_summary.json
 
-Keyword 결과
+기존 긴 자연어 Keyword 기준선
 evaluation/keyword/retrieval_summary.json
+
+개선된 구조화 Keyword 결과
+evaluation/keyword_structured/retrieval_summary.json
 ```
 
 ## 16. 현재 검증된 사항
@@ -451,7 +480,7 @@ evaluation/keyword/retrieval_summary.json
 - guides PDF 4개, 텍스트 128페이지, 청크 272개 확인
 - 기존 PGVector guides 청크 272개와 동일
 
-실제 Elasticsearch 인덱스 적재와 실제 BM25 검색은 사용자가 실행하도록 남겨 두었다. 따라서 Keyword 평가 수치는 아직 생성되지 않았다.
+긴 자연어 질문을 사용한 최초 Keyword 평가는 Source Hit@3 80.0%, MRR 0.7556이었다. 이후 구조화 입력 스키마, 한국어 검색 메타데이터, n-gram 보조 필드, 하위 질의 생성과 source 다양화를 구현했다. 새 Elasticsearch 매핑의 실제 적재와 `keyword_structured/` 재평가는 사용자가 실행하도록 남겨 두었으므로 개선 후 수치는 아직 생성되지 않았다.
 
 ## 17. 기존 원본 파일에서 변경된 점
 
@@ -473,7 +502,7 @@ evaluation/keyword/retrieval_summary.json
 
 ## 18. 다음 구현 단계
 
-다음 단계에서는 같은 평가 질문에 대해 Vector와 Keyword 후보를 각각 더 넓게 가져온 뒤 `chunk_id`를 기준으로 중복을 합치고 RRF 점수를 계산한다.
+다음 단계에서는 사용자가 Elasticsearch를 새 매핑으로 적재하고 구조화 Keyword 평가를 실행한다. 개선 결과가 확인되면 Vector와 Keyword 후보를 각각 더 넓게 가져온 뒤 `chunk_id`를 기준으로 중복을 합치고 두 검색기 사이의 RRF 점수를 계산한다.
 
 ```text
 Vector Top-N ─┐

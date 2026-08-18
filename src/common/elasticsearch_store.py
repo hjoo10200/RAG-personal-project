@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from collections import defaultdict
 from dataclasses import dataclass
 
 from elasticsearch import Elasticsearch
@@ -18,6 +19,16 @@ class KeywordSearchHit:
 
     document: Document
     score: float
+
+
+@dataclass(frozen=True)
+class FusedKeywordSearchHit:
+    """One deduplicated result fused from multiple structured keyword queries."""
+
+    document: Document
+    rrf_score: float
+    best_bm25_score: float
+    matched_queries: tuple[str, ...]
 
 
 def create_elasticsearch_client(
@@ -48,11 +59,25 @@ def keyword_index_mapping() -> dict[str, object]:
     """Return a plugin-free mapping suitable for Korean BM25 retrieval."""
     return {
         "settings": {
+            "index": {"max_ngram_diff": 13},
             "analysis": {
+                "tokenizer": {
+                    "korean_ngram_tokenizer": {
+                        "type": "ngram",
+                        "min_gram": 2,
+                        "max_gram": 15,
+                        "token_chars": ["letter", "digit"],
+                    }
+                },
                 "analyzer": {
                     "korean_standard": {
                         "type": "custom",
                         "tokenizer": "standard",
+                        "filter": ["lowercase"],
+                    },
+                    "korean_ngram": {
+                        "type": "custom",
+                        "tokenizer": "korean_ngram_tokenizer",
                         "filter": ["lowercase"],
                     }
                 }
@@ -64,6 +89,13 @@ def keyword_index_mapping() -> dict[str, object]:
                 "content": {
                     "type": "text",
                     "analyzer": "korean_standard",
+                    "fields": {
+                        "ngram": {
+                            "type": "text",
+                            "analyzer": "korean_ngram",
+                            "search_analyzer": "korean_standard",
+                        }
+                    },
                 },
                 "source_file": {
                     "type": "text",
@@ -73,6 +105,20 @@ def keyword_index_mapping() -> dict[str, object]:
                 "corpus": {"type": "keyword"},
                 "page_number": {"type": "integer"},
                 "chunk_id": {"type": "keyword"},
+                "document_title": {
+                    "type": "text",
+                    "analyzer": "korean_standard",
+                    "fields": {"raw": {"type": "keyword"}},
+                },
+                "policy_name": {
+                    "type": "text",
+                    "analyzer": "korean_standard",
+                    "fields": {"raw": {"type": "keyword"}},
+                },
+                "keywords": {
+                    "type": "text",
+                    "analyzer": "korean_standard",
+                },
                 "metadata": {"type": "object", "enabled": False},
             },
         },
@@ -98,6 +144,9 @@ def _bulk_actions(
                 "corpus": str(metadata.get("corpus", "")),
                 "page_number": int(metadata.get("page_number", 0)),
                 "chunk_id": chunk_id,
+                "document_title": str(metadata.get("document_title", "")),
+                "policy_name": str(metadata.get("policy_name", "")),
+                "keywords": list(metadata.get("search_keywords", [])),
                 "metadata": metadata,
             },
         }
@@ -146,11 +195,35 @@ def build_keyword_query(query: str) -> dict[str, object]:
                     }
                 },
                 {
+                    "match_phrase": {
+                        "document_title": {
+                            "query": normalized,
+                            "boost": 7.0,
+                        }
+                    }
+                },
+                {
+                    "match_phrase": {
+                        "policy_name": {
+                            "query": normalized,
+                            "boost": 9.0,
+                        }
+                    }
+                },
+                {
                     "multi_match": {
                         "query": normalized,
-                        "fields": ["source_file^2", "content"],
+                        "fields": [
+                            "policy_name^8",
+                            "document_title^6",
+                            "keywords^4",
+                            "source_file^2",
+                            "content",
+                            "content.ngram^0.5",
+                        ],
                         "type": "best_fields",
                         "operator": "or",
+                        "minimum_should_match": "35%",
                     }
                 },
             ],
@@ -198,3 +271,86 @@ def search_keyword_index(
             )
         )
     return hits
+
+
+def search_keyword_queries(
+    client: Elasticsearch,
+    index_name: str,
+    queries: Sequence[str],
+    *,
+    k: int = 3,
+    candidates_per_query: int = 5,
+    rrf_constant: int = 60,
+    max_per_source: int = 1,
+) -> list[FusedKeywordSearchHit]:
+    """Search concise subqueries and fuse their ranks without comparing raw scores."""
+    normalized_queries = tuple(
+        dict.fromkeys(" ".join(query.split()) for query in queries if query.strip())
+    )
+    if not normalized_queries:
+        raise ValueError("하나 이상의 키워드 하위 질의가 필요합니다.")
+    if k <= 0 or candidates_per_query <= 0:
+        raise ValueError("k와 candidates_per_query는 1 이상이어야 합니다.")
+    if rrf_constant < 0:
+        raise ValueError("rrf_constant는 0 이상이어야 합니다.")
+    if max_per_source <= 0:
+        raise ValueError("max_per_source는 1 이상이어야 합니다.")
+
+    scores: dict[str, float] = defaultdict(float)
+    best_scores: dict[str, float] = defaultdict(float)
+    documents: dict[str, Document] = {}
+    matched_queries: dict[str, list[str]] = defaultdict(list)
+
+    for query in normalized_queries:
+        hits = search_keyword_index(
+            client,
+            index_name,
+            query,
+            k=candidates_per_query,
+        )
+        for rank, hit in enumerate(hits, start=1):
+            metadata = hit.document.metadata
+            key = str(metadata.get("chunk_id", "")).strip()
+            if not key:
+                key = (
+                    f"{metadata.get('source_file', '')}:"
+                    f"{metadata.get('page_number', '')}:"
+                    f"{' '.join(hit.document.page_content.split())[:160]}"
+                )
+            scores[key] += 1.0 / (rrf_constant + rank)
+            best_scores[key] = max(best_scores[key], hit.score)
+            documents[key] = hit.document
+            if query not in matched_queries[key]:
+                matched_queries[key].append(query)
+
+    ranked = sorted(
+        scores,
+        key=lambda key: (-scores[key], -best_scores[key], key),
+    )
+    selected: list[str] = []
+    source_counts: dict[str, int] = defaultdict(int)
+    for key in ranked:
+        source = str(documents[key].metadata.get("source_file", ""))
+        if source_counts[source] >= max_per_source:
+            continue
+        selected.append(key)
+        source_counts[source] += 1
+        if len(selected) == k:
+            break
+    if len(selected) < k:
+        for key in ranked:
+            if key in selected:
+                continue
+            selected.append(key)
+            if len(selected) == k:
+                break
+
+    return [
+        FusedKeywordSearchHit(
+            document=documents[key],
+            rrf_score=scores[key],
+            best_bm25_score=best_scores[key],
+            matched_queries=tuple(matched_queries[key]),
+        )
+        for key in selected
+    ]

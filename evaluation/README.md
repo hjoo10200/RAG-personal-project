@@ -4,6 +4,12 @@
 
 2026-08-17 Vector-only 최초 결과는 `baselines/vector_only_2026-08-17/`에 질문과 함께 복사하여 보존했다. 이후 Elasticsearch와 Hybrid 평가 결과는 이 기준선 파일을 덮어쓰지 않는다.
 
+2026-08-18 Elasticsearch BM25 평가 결과와 실패 원인 분석은 `keyword/retrieval_evaluation_report.md`에 정리되어 있다.
+
+이 최초 결과는 긴 자연어 질문 전체를 BM25에 전달한 기준선이다. 개선된 평가는 `keyword_retrieval_questions.jsonl`의 구조화 하위 질의를 사용하며 결과를 `keyword_structured/`에 별도로 저장한다.
+
+구조화 키워드 검색의 지표 비교, 실제 청크 품질, 평가 한계와 다음 개선 순서는 `keyword_structured/retrieval_evaluation_report.md`에 정리되어 있다.
+
 ## 구성
 
 - `guides`: G01~G05, 5개

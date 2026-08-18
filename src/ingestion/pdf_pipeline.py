@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -61,8 +62,16 @@ def load_pdf_pages(
     pdf_paths: list[Path], project_root: Path, corpus_name: str
 ) -> list[Document]:
     pages: list[Document] = []
+    search_metadata_path = (
+        project_root / "knowledge_base" / "metadata" / "search_metadata.json"
+    )
+    search_metadata: dict[str, dict[str, Any]] = {}
+    if search_metadata_path.is_file():
+        payload = json.loads(search_metadata_path.read_text(encoding="utf-8"))
+        search_metadata = dict(payload.get("documents", {}))
     for pdf_path in pdf_paths:
         document_hash = file_sha256(pdf_path)
+        document_search_metadata = search_metadata.get(pdf_path.name, {})
         loaded = list(PyPDFLoader(str(pdf_path), extract_images=False).lazy_load())
         retained = 0
         nul_replacements = 0
@@ -83,6 +92,15 @@ def load_pdf_pages(
                     "knowledge_role": corpus_name,
                     "document_sha256": document_hash,
                     "page_number": page_index + 1,
+                    "document_title": str(
+                        document_search_metadata.get("document_title", pdf_path.stem)
+                    ),
+                    "policy_name": str(
+                        document_search_metadata.get("policy_name", "")
+                    ),
+                    "search_keywords": list(
+                        document_search_metadata.get("search_keywords", [])
+                    ),
                 }
             )
             pages.append(page)

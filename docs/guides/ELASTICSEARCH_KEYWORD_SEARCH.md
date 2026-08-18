@@ -58,18 +58,31 @@ docker compose ps
 
 세 인덱스를 각각 검색하려면 `--corpus all`을 사용한다. 결과에는 BM25 점수, 원본 PDF 파일명, 페이지와 본문 미리보기가 출력된다. BM25 점수는 Elasticsearch 검색 내부의 순위에만 사용하며 PGVector 코사인 거리와 직접 더하지 않는다.
 
+실제 서비스 입력처럼 연령, 목표 지역, 주거 형태, 고용·학업 상태 등을 조합해 검색하려면 구조화 검색 CLI를 사용한다.
+
+```powershell
+.venv\Scripts\python.exe -m src.retrieval.structured_keyword_search `
+  --input examples\inputs\real_rag_input.json `
+  --corpus all `
+  -k 3
+```
+
+이 명령은 입력 전체를 하나의 문장으로 연결하지 않는다. 계약·이사·예산, 실제 사례, 월세지원·이사비·고용·학업 정책처럼 검색 목적별로 필요한 필드만 선택해 여러 개의 짧은 키워드 하위 질의를 만든다. 같은 청크는 `chunk_id`로 합치고 하위 질의별 순위를 RRF로 결합하며, 최종 결과에서는 서로 다른 PDF를 우선한다.
+
 ## 5. 키워드 검색 자동 평가
 
 ```powershell
 .venv\Scripts\python.exe -m src.retrieval.evaluate_keyword_retrieval
 ```
 
-기존 15개 질문을 사용하지만 Vector-only 결과를 덮어쓰지 않고 다음 경로에 저장한다.
+Keyword 전용 구조화 하위 질의 15개를 사용하며 기존 자연어 Keyword 결과와 Vector-only 결과를 덮어쓰지 않고 다음 경로에 저장한다.
 
-- `evaluation/keyword/retrieval_results.csv`
-- `evaluation/keyword/retrieval_summary.json`
+- `evaluation/keyword_structured/retrieval_results.csv`
+- `evaluation/keyword_structured/retrieval_summary.json`
 
 이 결과를 `evaluation/baselines/vector_only_2026-08-17/`의 Vector-only 기준선과 비교한다.
+
+긴 자연어 질문을 그대로 사용했던 최초 Keyword 평가 결과와 실패 원인은 [`evaluation/keyword/retrieval_evaluation_report.md`](../../evaluation/keyword/retrieval_evaluation_report.md)에 보존되어 있다. 새 결과는 재적재 후 `keyword_structured/`에 생성된다.
 
 ## 다음 단계
 

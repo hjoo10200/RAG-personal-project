@@ -177,6 +177,10 @@ LangChain의 `PGVector.from_documents`가 청크 본문, 384차원 벡터와 JSO
 {
   "situation": {
     "purpose": "취업",
+    "age": 27,
+    "employment_status": "재직 중",
+    "education_status": "대학교 졸업",
+    "is_homeowner": false,
     "current_region": "경기도 수원시",
     "target_region": "서울특별시",
     "monthly_income_krw": 2200000,
@@ -192,6 +196,10 @@ LangChain의 `PGVector.from_documents`가 청크 본문, 384차원 벡터와 JSO
 | 입력 필드 | 형식 | 의미 |
 |---|---|---|
 | `purpose` | 문자열 | 취업, 취업 준비, 학업 등 독립 목적 |
+| `age` | 0~120 정수 | 정책 연령 검색에 사용하는 만 나이 |
+| `employment_status` | 문자열 | 재직, 구직, 취업 준비 등 고용 상태 |
+| `education_status` | 문자열 | 재학, 졸업 등 학업 상태 |
+| `is_homeowner` | 불리언 또는 null | 본인 명의 주택 보유 여부 |
 | `current_region` | 문자열 | 현재 거주 지역 |
 | `target_region` | 문자열 | 독립하려는 지역 |
 | `monthly_income_krw` | 0 이상의 정수 | 현재 월 소득 |
@@ -205,7 +213,7 @@ Pydantic은 정의되지 않은 추가 필드를 허용하지 않는다. 두 금
 
 ## 8. 사용자 입력에서 검색 질의를 만드는 방법
 
-`src/retrieval/rag_pipeline.py`는 사용자 상황을 하나의 복잡한 질문으로 검색하지 않는다. 코퍼스의 역할에 맞춰 총 7개의 검색 질의를 프로그램이 만든다.
+검색 질의는 Vector 검색과 Keyword 검색이 서로 다르게 만든다. `src/retrieval/rag_pipeline.py`는 의미 검색용 문장을 만들고, `src/retrieval/keyword_query_builder.py`는 선택형·구조화 입력에서 정확한 용어 중심의 하위 질의를 만든다. 어느 쪽도 사용자 입력 전체를 하나의 긴 문장으로 무조건 연결하지 않는다.
 
 | 코퍼스 | 질의 수 | 검색 의도 |
 |---|---:|---|
@@ -213,7 +221,7 @@ Pydantic은 정의되지 않은 추가 필드를 허용하지 않는다. 두 금
 | `cases` | 2개 | 실제 생활비와 소득 공백 사례, 지역 이동·통근·주거 선택 사례 |
 | `policies` | 2개 | 목표 지역의 청년 월세 지원, 중개보수·이사비 지원 |
 
-목적, 현재 지역, 목표 지역, 독립 시기, 주거 형태, 우선순위와 자유 입력을 조합한 상황 요약이 가이드 검색에 반영된다. 사례와 정책 검색에는 각 코퍼스에서 필요한 용어를 함께 넣는다.
+Keyword 검색에서는 가이드에 계약·이사·예산 용어, 사례에 연령대·이동·생활비·우선순위, 정책에 목표 지역·주거 형태·연령·무주택 여부·고용·학업 상태를 선택적으로 반영한다. 월세·서울·재직 상태라면 청년월세지원, 중개보수·이사비와 근로청년 자산형성 정책을 각각 별도 하위 질의로 만든다.
 
 이 방식은 LLM이 검색 질의를 생성하는 구조가 아니다. 현재는 코드에 정의된 템플릿으로 검색 질의를 만드는 결정적 query transformation이다.
 
@@ -253,6 +261,10 @@ LLM 입력 크기를 통제하기 위해 각 근거 본문은 공백을 정규�
 {
   "situation": {
     "purpose": "취업",
+    "age": 27,
+    "employment_status": "재직 중",
+    "education_status": "대학교 졸업",
+    "is_homeowner": false,
     "current_region": "경기도 수원시",
     "target_region": "서울특별시",
     "monthly_income_krw": 2200000,

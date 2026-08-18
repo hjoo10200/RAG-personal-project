@@ -9,11 +9,10 @@ from typing import Any
 from src.common.elasticsearch_store import (
     count_index_documents,
     create_elasticsearch_client,
-    search_keyword_index,
+    search_keyword_queries,
 )
 from src.config import CORPUS_NAMES, PROJECT_ROOT, ElasticsearchSettings
 from src.retrieval.evaluate_retrieval import (
-    DEFAULT_QUESTIONS,
     clean_preview,
     load_questions,
     write_results,
@@ -21,8 +20,15 @@ from src.retrieval.evaluate_retrieval import (
 )
 
 
-DEFAULT_RESULTS = PROJECT_ROOT / "evaluation" / "keyword" / "retrieval_results.csv"
-DEFAULT_SUMMARY = PROJECT_ROOT / "evaluation" / "keyword" / "retrieval_summary.json"
+DEFAULT_QUESTIONS = (
+    PROJECT_ROOT / "evaluation" / "keyword_retrieval_questions.jsonl"
+)
+DEFAULT_RESULTS = (
+    PROJECT_ROOT / "evaluation" / "keyword_structured" / "retrieval_results.csv"
+)
+DEFAULT_SUMMARY = (
+    PROJECT_ROOT / "evaluation" / "keyword_structured" / "retrieval_summary.json"
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -39,11 +45,14 @@ def evaluate_question(
     index_name: str,
 ) -> dict[str, Any]:
     top_k = int(question["top_k"])
-    hits = search_keyword_index(
+    keyword_queries = tuple(question.get("keyword_queries") or (question["question"],))
+    hits = search_keyword_queries(
         client,
         index_name,
-        question["question"],
+        keyword_queries,
         k=top_k,
+        candidates_per_query=max(top_k + 2, 5),
+        max_per_source=1,
     )
     expected_sources = set(question["expected_sources"])
     retrieved_sources = [
@@ -66,6 +75,7 @@ def evaluate_question(
         "question_id": question["id"],
         "corpus": question["corpus"],
         "question": question["question"],
+        "keyword_queries": " || ".join(keyword_queries),
         "top_k": top_k,
         "expected_sources": " | ".join(question["expected_sources"]),
         "minimum_source_hits": minimum_hits,
@@ -81,12 +91,20 @@ def evaluate_question(
             metadata = hit.document.metadata
             row[f"rank{rank}_source"] = metadata.get("source_file", "")
             row[f"rank{rank}_page"] = metadata.get("page_number", "")
-            row[f"rank{rank}_bm25_score"] = round(hit.score, 6)
+            row[f"rank{rank}_rrf_score"] = round(hit.rrf_score, 8)
+            row[f"rank{rank}_best_bm25_score"] = round(
+                hit.best_bm25_score, 6
+            )
+            row[f"rank{rank}_matched_queries"] = " || ".join(
+                hit.matched_queries
+            )
             row[f"rank{rank}_preview"] = clean_preview(hit.document.page_content)
         else:
             row[f"rank{rank}_source"] = ""
             row[f"rank{rank}_page"] = ""
-            row[f"rank{rank}_bm25_score"] = ""
+            row[f"rank{rank}_rrf_score"] = ""
+            row[f"rank{rank}_best_bm25_score"] = ""
+            row[f"rank{rank}_matched_queries"] = ""
             row[f"rank{rank}_preview"] = ""
     return row
 
