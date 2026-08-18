@@ -31,7 +31,7 @@ storage/         # 실행 중 생성되는 결과물
 
 PDF는 용도에 따라 `guides`, `cases`, `policies` 세 PGVector 컬렉션으로 분리한다. 직접 실행할 명령과 검증 순서는 [PDF 적재 가이드](docs/guides/CORPUS_INGESTION_GUIDE.md)를 참고한다.
 
-Vector-only 기준선은 `evaluation/baselines/vector_only_2026-08-17/`에 보존되어 있다. 동일한 PDF 청크를 Elasticsearch에 적재하고 BM25 키워드 검색을 시험하는 방법은 [Elasticsearch 키워드 검색 가이드](docs/guides/ELASTICSEARCH_KEYWORD_SEARCH.md)를 참고한다. 현재 실제 보고서 생성 경로는 아직 Vector-only이며 RRF 결합은 다음 단계다.
+Vector-only 기준선은 `evaluation/baselines/vector_only_2026-08-17/`에 보존되어 있다. 동일한 PDF 청크를 Elasticsearch에 적재하고 BM25 키워드 검색을 시험하는 방법은 [Elasticsearch 키워드 검색 가이드](docs/guides/ELASTICSEARCH_KEYWORD_SEARCH.md)를 참고한다. 실제 보고서 생성 경로는 PGVector와 Elasticsearch 결과를 Weighted RRF로 결합하는 Hybrid 검색을 사용한다. 결합 원리와 코드 흐름은 [Hybrid RAG 구현 흐름 설명서](docs/reports/HYBRID_RAG_PIPELINE.md)에 정리되어 있다.
 
 검색 품질 검증에는 [`evaluation/retrieval_questions.jsonl`](./evaluation/retrieval_questions.jsonl)의 대표 질문 15개와 [`evaluation/retrieval_results.csv`](./evaluation/retrieval_results.csv) 기록 양식을 사용한다.
 
@@ -41,4 +41,4 @@ Vector-only 기준선은 `evaluation/baselines/vector_only_2026-08-17/`에 보�
 
 Groq `openai/gpt-oss-120b` 연결과 종합 보고서 JSON 생성의 1단계 시험 방법은 [생성 단계 검증 가이드](docs/guides/GENERATION_STEP_1.md)를 참고한다. 현재 단계는 검색 결과 자동 연결과 HTML/PDF 렌더링 전의 독립 생성 시험이다.
 
-실제 PGVector 검색 결과를 Groq 보고서 생성에 연결하는 전체 RAG 실행 방법은 [실제 RAG 실행 가이드](docs/guides/REAL_RAG_RUN_GUIDE.md)를 참고한다. 이 실행 경로는 `TEST_*` 합성 문서를 사용하지 않는다. 전체 흐름과 입력·출력은 [현재 구현 상세 설명서](docs/IMPLEMENTATION_OVERVIEW.md), 다른 문서 목록은 [문서 인덱스](docs/README.md)에 정리되어 있다.
+실제 Hybrid 검색 결과를 Groq 보고서 생성에 연결하는 전체 RAG 실행 방법은 [실제 RAG 실행 가이드](docs/guides/REAL_RAG_RUN_GUIDE.md)를 참고한다. 이 실행 경로는 `TEST_*` 합성 문서를 사용하지 않는다. 전체 흐름과 입력·출력은 [현재 구현 상세 설명서](docs/IMPLEMENTATION_OVERVIEW.md), 다른 문서 목록은 [문서 인덱스](docs/README.md)에 정리되어 있다.

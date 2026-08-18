@@ -22,3 +22,4 @@
 
 - [적재 파이프라인 개선 보고서](reports/INGESTION_PIPELINE_REPORT.md)
 - [Elasticsearch 키워드 검색 구현 흐름 설명서](reports/ELASTICSEARCH_KEYWORD_PIPELINE.md)
+- [Hybrid RAG 구현 흐름 설명서](reports/HYBRID_RAG_PIPELINE.md)

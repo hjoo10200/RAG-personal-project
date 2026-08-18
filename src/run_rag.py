@@ -1,4 +1,4 @@
-"""Run the real PGVector retrieval-to-Groq generation pipeline."""
+"""Run the real hybrid retrieval-to-Groq generation pipeline."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from src.generation.report_generator import generate_narrative_report
 from src.generation.report_schema import RagRequest
-from src.retrieval.rag_pipeline import retrieve_real_evidence
+from src.retrieval.hybrid_pipeline import retrieve_hybrid_evidence
 
 
 def parse_args() -> argparse.Namespace:
@@ -22,12 +22,12 @@ def parse_args() -> argparse.Namespace:
         "--evidence-output",
         type=Path,
         required=True,
-        help="실제 PGVector 검색 근거를 저장할 JSON 경로",
+        help="실제 Hybrid 검색 근거를 저장할 JSON 경로",
     )
     parser.add_argument(
         "--retrieve-only",
         action="store_true",
-        help="PGVector 검색과 증거 저장까지만 실행",
+        help="Hybrid 검색과 증거 저장까지만 실행",
     )
     return parser.parse_args()
 
@@ -48,19 +48,21 @@ def main() -> None:
     args = parse_args()
     try:
         rag_input = load_request(args.input)
-        generation_request = retrieve_real_evidence(rag_input.situation)
+        generation_request = retrieve_hybrid_evidence(rag_input.situation)
         write_evidence(args.evidence_output, generation_request)
     except (OSError, ValidationError, ValueError, RuntimeError) as error:
-        raise SystemExit(f"실제 PGVector 검색 실패: {error}") from error
+        raise SystemExit(f"실제 Hybrid 검색 실패: {error}") from error
 
     print(
-        f"[ok] 실제 PGVector 근거 {len(generation_request.retrieved_context)}개 저장: "
+        f"[ok] 실제 Hybrid 근거 {len(generation_request.retrieved_context)}개 저장: "
         f"{args.evidence_output.resolve()}"
     )
     for evidence in generation_request.retrieved_context:
         print(
             f"[evidence] corpus={evidence.corpus} "
-            f"source={evidence.source_file} page={evidence.page_number}"
+            f"source={evidence.source_file} page={evidence.page_number} "
+            f"methods={'+'.join(evidence.retrieval_methods)} "
+            f"rrf={evidence.hybrid_score}"
         )
 
     if args.retrieve_only:

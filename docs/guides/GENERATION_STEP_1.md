@@ -44,7 +44,7 @@ API 키를 입력한 뒤 모델 설정도 확인한다.
   --output storage\generated_reports\smoke_report.json
 ```
 
-성공하면 `storage/generated_reports/smoke_report.json`에 `report_title`과 `report_body_markdown`을 가진 JSON이 저장된다. 모델은 내부적으로 일곱 주제의 분석 문단과 실행 문단을 각각 생성하고, 프로그램이 이를 하나의 Markdown 본문으로 합친다. 최종 본문은 목록이나 표가 아닌 자세한 서술형 문단이며 각 소제목에는 정확히 두 문단이 들어가고 전체 본문은 3,000자 이상이어야 한다. 이 디렉터리는 Git 추적에서 제외된다.
+성공하면 `storage/generated_reports/smoke_report.json`에 `report_title`과 `report_body_markdown`을 가진 JSON이 저장된다. 모델은 내부적으로 독립 판단 등급과 다섯 주제의 서술 문단을 생성하고, 프로그램이 이를 하나의 Markdown 본문으로 합친다. 다섯 주제는 상황과 독립 적절성, 집 찾기와 임대차계약, 이사와 입주 정착, 주의점, 정부·지자체 정책이다. 첫 절은 예산 반복을 막기 위해 한 문단이며 나머지는 분석·실행 두 문단이다. 최종 본문은 목록이나 표가 아닌 자세한 존댓말 서술 문단이며 전체 본문은 2,400자 이상이어야 한다. 이 디렉터리는 Git 추적에서 제외된다.
 
 ## 현재 포함하지 않은 범위
 

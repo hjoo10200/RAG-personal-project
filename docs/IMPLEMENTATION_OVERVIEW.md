@@ -2,7 +2,7 @@
 
 ## 1. 문서 목적
 
-이 문서는 청년 자취 독립 플래너 RAG 프로젝트에 현재 구현된 기능을 코드 기준으로 설명한다. 원본 PDF가 어떻게 청크와 벡터로 변환되는지, 사용자가 어떤 값을 입력하는지, PGVector 검색 결과가 어떻게 Groq LLM에 전달되는지, 최종적으로 어떤 JSON이 생성되는지를 하나의 흐름으로 연결한다.
+이 문서는 청년 자취 독립 플래너 RAG 프로젝트에 현재 구현된 기능을 코드 기준으로 설명한다. 원본 PDF가 어떻게 청크와 벡터·키워드 인덱스로 변환되는지, 사용자가 어떤 값을 입력하는지, PGVector와 Elasticsearch 결과가 어떻게 결합되어 Groq LLM에 전달되는지, 최종적으로 어떤 JSON이 생성되는지를 하나의 흐름으로 연결한다.
 
 현재 시스템의 핵심 결과물은 사용자의 독립 상황을 입력받아 실제 PDF 검색 근거가 포함된 상세한 자취 준비 보고서를 JSON으로 생성하는 것이다. JSON 안에는 보고서 제목과 Markdown 형식의 서술형 본문이 들어간다.
 
@@ -18,11 +18,12 @@
 - 동일 PDF 청크의 Elasticsearch 적재와 BM25 키워드 검색
 - 평가 질문 세트를 이용한 검색 품질 자동 평가
 - 사용자 상황을 코퍼스별 검색 질의로 변환
-- 실제 PGVector 검색 근거 선별 및 JSON 저장
+- PGVector와 Elasticsearch 결과의 Weighted RRF 결합
+- 실제 Hybrid 검색 근거 선별 및 JSON 저장
 - LangChain과 Groq를 이용한 상세 서술형 보고서 생성
 - LLM 출력 구조, 본문 길이, 문단 구성과 출처에 대한 후처리 검증
 
-실제 보고서 생성 경로는 아직 임베딩 기반 벡터 검색만 사용한다. Elasticsearch BM25 키워드 검색은 독립 적재·검색·평가 단계까지 구현되어 있지만 Vector 결과와 결합되지는 않았다. RRF 하이브리드 결합, reranker, Corrective RAG, 정책 자동 최신화, 웹 UI, 차트 생성, HTML·PDF 렌더링은 아직 구현되지 않았다.
+실제 보고서 생성 경로는 임베딩 기반 Vector 검색과 Elasticsearch BM25 키워드 검색을 Weighted RRF로 결합한다. 별도의 reranker, Corrective RAG, 정책 자동 최신화, 웹 UI, 차트 생성, HTML·PDF 렌더링은 아직 구현되지 않았다.
 
 ## 3. 전체 시스템 구조
 
@@ -33,10 +34,15 @@ flowchart TD
     C --> D["RecursiveCharacterTextSplitter 청킹"]
     D --> E["multilingual-e5-small 임베딩"]
     E --> F["PGVector 3개 컬렉션"]
+    D --> K["Elasticsearch 3개 키워드 인덱스"]
 
-    U["사용자 상황 JSON"] --> Q["코퍼스별 검색 질의 생성"]
-    Q --> F
-    F --> R["관련 청크 검색·중복 제거"]
+    U["사용자 상황 JSON"] --> VQ["Vector 하위 질의"]
+    U --> KQ["Keyword 하위 질의"]
+    VQ --> F
+    KQ --> K
+    F --> H["Weighted RRF"]
+    K --> H
+    H --> R["관련 청크 검색·중복 제거"]
     R --> J["GenerationRequest 구성 및 근거 JSON 저장"]
     J --> P["LangChain ChatPromptTemplate"]
     P --> L["Groq openai/gpt-oss-120b"]
@@ -47,8 +53,8 @@ flowchart TD
 
 전체 흐름은 서로 다른 두 시점으로 나뉜다.
 
-1. 사전 작업인 적재 단계에서는 PDF를 읽어 청크와 벡터를 PGVector에 저장한다.
-2. 서비스 실행 단계에서는 사용자 입력으로 PGVector를 검색하고, 검색된 근거와 사용자 상황을 LLM에 전달해 보고서를 생성한다.
+1. 사전 작업인 적재 단계에서는 같은 PDF 청크를 PGVector와 Elasticsearch에 각각 저장한다.
+2. 서비스 실행 단계에서는 사용자 입력으로 두 저장소를 검색하고 순위를 결합한 뒤, 최종 근거와 사용자 상황을 LLM에 전달해 보고서를 생성한다.
 
 ## 4. 주요 디렉터리와 파일 역할
 
@@ -208,6 +214,11 @@ LangChain의 `PGVector.from_documents`가 청크 본문, 384차원 벡터와 JSO
 | `housing_preference` | 문자열 | 월세 등 선호 주거 형태 |
 | `priorities` | 문자열 배열 | 통근, 비용, 안전 등 사용자가 중요하게 보는 조건 |
 | `additional_context` | 문자열 | 선택형 항목으로 표현하기 어려운 자유 입력 상황 |
+| `target_deposit_krw` | 0 이상의 정수 또는 null | 알아본 매물의 목표 보증금 |
+| `target_monthly_rent_krw` | 0 이상의 정수 또는 null | 알아본 매물의 목표 월세 |
+| `expected_management_fee_krw` | 0 이상의 정수 또는 null | 예상 월 관리비 |
+| `other_monthly_fixed_cost_krw` | 0 이상의 정수 또는 null | 주거비 외 기존 월 고정지출 |
+| `monthly_debt_payment_krw` | 0 이상의 정수 또는 null | 월 부채 상환액 |
 
 Pydantic은 정의되지 않은 추가 필드를 허용하지 않는다. 두 금액 필드는 음수를 허용하지 않는다. 현재 CLI 입력에서는 목적이나 주거 형태를 미리 정한 선택지로 제한하지 않고 문자열로 받지만, 향후 UI에서는 동일 필드를 선택형으로 제공할 수 있다.
 
@@ -225,22 +236,22 @@ Keyword 검색에서는 가이드에 계약·이사·예산 용어, 사례에 �
 
 이 방식은 LLM이 검색 질의를 생성하는 구조가 아니다. 현재는 코드에 정의된 템플릿으로 검색 질의를 만드는 결정적 query transformation이다.
 
-## 9. 벡터 검색과 근거 선별
+## 9. Hybrid 검색과 근거 선별
 
-각 검색 질의는 해당 코퍼스의 PGVector 컬렉션에서 상위 4개 청크를 가져온다. 반환되는 점수는 코사인 거리이므로 값이 낮을수록 질의와 가까운 결과다.
+Vector 검색은 각 하위 질의에서 PGVector 후보를 가져오고 Keyword 검색은 Elasticsearch BM25 후보를 가져온다. 서로 단위가 다른 코사인 거리와 BM25 점수를 직접 더하지 않고, 각 검색 결과의 순위를 Weighted RRF로 결합한다. 가이드와 사례는 Vector 0.60·Keyword 0.40, 정책은 Vector 0.45·Keyword 0.55를 사용한다. 정책은 지역·고용·학업 조건을 반영한 구조화 Keyword 검색에서 발견된 후보만 최종 선별 대상으로 삼아, 의미만 비슷한 부적합 정책의 유입을 줄인다.
 
 최종 보고서에 전달하는 기본 최대 근거 수는 다음과 같다.
 
 | 코퍼스 | 최대 근거 수 |
 |---|---:|
-| `guides` | 3개 |
-| `cases` | 2개 |
-| `policies` | 2개 |
-| 합계 | 최대 7개 |
+| `guides` | 4개 |
+| `cases` | 3개 |
+| `policies` | 4개 |
+| 합계 | 최대 11개 |
 
-한 PDF의 여러 청크가 결과를 독점하지 않도록 먼저 질의별로 서로 다른 원본 파일을 선택한다. 필요한 수를 채우지 못하면 거리 순으로 후보를 다시 살펴보되 이미 선택한 청크는 제외한다.
+같은 `chunk_id`는 하나로 합치며 먼저 서로 다른 원본 파일을 선택한다. 남은 자리는 동일 PDF의 다른 페이지를 허용하되 같은 출처·페이지의 반복 청크는 제외한다.
 
-LLM 입력 크기를 통제하기 위해 각 근거 본문은 공백을 정규화한 뒤 최대 450자로 제한한다. 검색 결과에 `source_file` 또는 올바른 `page_number`가 없으면 출처를 보장할 수 없으므로 오류로 중단한다.
+LLM 입력 크기를 통제하기 위해 각 근거 본문은 공백을 정규화한 뒤 최대 400자로 제한한다. 검색 추적용 RRF 점수와 하위 질의는 근거 JSON에 저장하지만 생성 모델에는 전달하지 않는다. 검색 결과에 `source_file` 또는 올바른 `page_number`가 없으면 출처를 보장할 수 없으므로 오류로 중단한다.
 
 선별된 근거는 다음 구조의 `RetrievedEvidence` 배열이 된다.
 
@@ -249,7 +260,10 @@ LLM 입력 크기를 통제하기 위해 각 근거 본문은 공백을 정규�
   "corpus": "guides",
   "source_file": "원본문서.pdf",
   "page_number": 12,
-  "content": "검색된 실제 청크의 본문..."
+  "content": "검색된 실제 청크의 본문...",
+  "retrieval_methods": ["keyword", "vector"],
+  "hybrid_score": 0.01572421,
+  "matched_queries": ["해당 청크가 발견된 하위 질의"]
 }
 ```
 
@@ -279,7 +293,10 @@ LLM 입력 크기를 통제하기 위해 각 근거 본문은 공백을 정규�
       "corpus": "guides",
       "source_file": "원본문서.pdf",
       "page_number": 12,
-      "content": "실제 PGVector에서 검색된 청크"
+      "content": "실제 Hybrid 검색으로 결합된 청크",
+      "retrieval_methods": ["keyword", "vector"],
+      "hybrid_score": 0.01572421,
+      "matched_queries": ["검색 하위 질의"]
     }
   ]
 }
@@ -298,19 +315,17 @@ LLM 입력 크기를 통제하기 위해 각 근거 본문은 공백을 정규�
 - `with_structured_output`: LLM 출력을 strict JSON Schema에 맞게 제한
 - Runnable 파이프라인 `prompt | structured_llm`: 프롬프트와 모델 호출 연결
 
-기본 생성 설정은 temperature 0, 최대 출력 토큰 3,500, 타임아웃 120초, 재시도 2회, reasoning effort `low`다.
+기본 생성 설정은 temperature 0, 최대 출력 토큰 2,000, 타임아웃 120초, 재시도 2회, reasoning effort `low`다.
 
-LLM은 최종 Markdown 문자열을 한 번에 직접 생성하지 않는다. 먼저 일곱 주제 각각에 대해 분석 문단과 실행 문단을 가진 `NarrativeDraft` JSON을 생성한다.
+LLM은 최종 Markdown 문자열을 한 번에 직접 생성하지 않는다. 먼저 명시적인 독립 적절성 판단과 다섯 주제의 문단을 가진 `NarrativeDraft` JSON을 생성한다. 첫 판단 절은 한 문단이고, 나머지 네 절은 분석·실행 문단으로 구성된다.
 
-1. 현재 상황과 독립 방향
-2. 부동산 정보와 계약 전 확인사항
-3. 이사 전·당일·직후 준비
-4. 예상 예산
-5. 자취 시작 전후 주의점
-6. 지원정책과 신청 전 확인사항
-7. 실행 순서와 추가 확인 정보
+1. 현재 상황 요약과 독립 적절성 판단
+2. 집 찾기와 임대차계약 진행 방법
+3. 이사 준비와 입주 후 정착 방법
+4. 자취 시작 전후 주의점
+5. 도움이 되는 정부·지자체 정책
 
-프로그램은 이 14개 문단을 순서대로 조립해 하나의 Markdown 본문을 만든다. 마지막 문단에는 이번 생성에 사용된 검색 근거의 출처 목록을 덧붙인다.
+프로그램은 이 문단들을 순서대로 조립해 하나의 Markdown 본문을 만든다. 첫 문단에는 세 등급 중 선택된 독립 판단을 명시하고, 마지막 문단에는 이번 생성에 사용된 검색 근거의 출처 목록을 덧붙인다.
 
 ## 12. 최종 출력
 
@@ -319,7 +334,7 @@ LLM은 최종 Markdown 문자열을 한 번에 직접 생성하지 않는다. �
 ```json
 {
   "report_title": "사용자 상황에 맞춘 보고서 제목",
-  "report_body_markdown": "## 1. 현재 상황과 독립 방향\n\n첫 번째 분석 문단...\n\n실행 문단...\n\n## 2. ..."
+  "report_body_markdown": "## 1. 현재 상황 요약과 독립 적절성 판단\n\n현재 판단은 **조건 확인 후 독립이 적절함**이다...\n\n실행 문단...\n\n## 2. ..."
 }
 ```
 
@@ -328,7 +343,7 @@ LLM은 최종 Markdown 문자열을 한 번에 직접 생성하지 않는다. �
 | 출력 필드 | 의미 |
 |---|---|
 | `report_title` | LLM이 작성한 보고서 제목 |
-| `report_body_markdown` | 일곱 개 이상의 소제목과 상세 문단으로 구성된 전체 보고서 본문 |
+| `report_body_markdown` | 다섯 개 이상의 소제목과 상세 문단으로 구성된 전체 보고서 본문 |
 
 본문은 JSON 문자열이지만 내용 자체는 Markdown이다. 현재 출력에는 별도의 예산 배열, 정책 배열이나 차트 데이터가 없다. 표나 불릿 목록이 아닌 상세 서술형 보고서를 의도한 구조다.
 
@@ -336,11 +351,11 @@ LLM은 최종 Markdown 문자열을 한 번에 직접 생성하지 않는다. �
 
 LLM 응답을 그대로 저장하지 않고 다음 조건을 코드로 검증한다.
 
-- 보고서에 `##` 소제목이 7개 이상 존재해야 한다.
-- 전체 본문은 3,000자 이상이어야 한다.
-- 각 소제목 아래에 두 개 이상의 문단이 있어야 한다.
+- 보고서에 `##` 소제목이 5개 이상 존재해야 한다.
+- 전체 본문은 2,400자 이상이어야 한다.
+- 첫 소제목은 한 문단, 나머지 소제목은 두 개 이상의 문단이어야 한다.
 - 불릿 목록과 번호 목록을 포함할 수 없다.
-- 부동산·계약, 이사, 예산·생활비, 주의·안전, 지원·정책 주제가 포함되어야 한다.
+- 부동산·계약, 이사, 주의·안전, 지원·정책 주제가 포함되어야 한다.
 - 본문에 `[출처: 파일명, p.페이지]` 형식의 출처가 있어야 한다.
 - 본문에서 인용한 모든 파일명과 페이지가 실제 `retrieved_context`에 있어야 한다.
 
@@ -348,7 +363,7 @@ LLM이 검색되지 않은 문서나 페이지를 출처로 만들면 최종 저
 
 ## 14. 실제 RAG 실행 방법
 
-먼저 PostgreSQL과 PGVector를 실행한다.
+먼저 PostgreSQL·PGVector와 Elasticsearch를 실행한다.
 
 ```powershell
 docker compose up -d
@@ -360,8 +375,8 @@ docker compose ps
 ```powershell
 .venv\Scripts\python.exe -m src.run_rag `
   --input examples\inputs\real_rag_input.json `
-  --evidence-output storage\generated_reports\real_rag_evidence.json `
-  --output storage\generated_reports\real_rag_report.json
+  --evidence-output storage\generated_reports\hybrid_rag_evidence.json `
+  --output storage\generated_reports\hybrid_rag_report.json
 ```
 
 입출력 흐름은 다음과 같다.
@@ -369,10 +384,10 @@ docker compose ps
 ```text
 examples/inputs/real_rag_input.json
   → 사용자 상황 검증
-  → PGVector 실제 검색
-  → storage/generated_reports/real_rag_evidence.json
+  → PGVector와 Elasticsearch 검색 및 Weighted RRF
+  → storage/generated_reports/hybrid_rag_evidence.json
   → Groq 보고서 생성
-  → storage/generated_reports/real_rag_report.json
+  → storage/generated_reports/hybrid_rag_report.json
 ```
 
 검색만 실행하려면 `--retrieve-only`를 추가한다.
@@ -380,8 +395,8 @@ examples/inputs/real_rag_input.json
 ```powershell
 .venv\Scripts\python.exe -m src.run_rag `
   --input examples\inputs\real_rag_input.json `
-  --evidence-output storage\generated_reports\real_rag_evidence.json `
-  --output storage\generated_reports\real_rag_report.json `
+  --evidence-output storage\generated_reports\hybrid_rag_evidence.json `
+  --output storage\generated_reports\hybrid_rag_report.json `
   --retrieve-only
 ```
 
@@ -451,7 +466,7 @@ API 호출 없이 입력 스키마만 확인하려면 다음 명령을 사용한
 | `PGVECTOR_URL` | PostgreSQL·PGVector 연결 문자열 |
 | `GROQ_API_KEY` | 실제 Groq API 키 |
 | `GROQ_MODEL` | `openai/gpt-oss-120b`로 고정 |
-| `GROQ_MAX_TOKENS` | 기본 3,500 |
+| `GROQ_MAX_TOKENS` | 기본 2,000 |
 
 실제 API 키는 `.env`에만 저장하며 Git에 포함하지 않는다.
 
@@ -471,7 +486,7 @@ API 호출 없이 입력 스키마만 확인하려면 다음 명령을 사용한
 
 ## 19. 현재 구현의 중요한 한계
 
-첫째, 실제 보고서 생성 검색은 아직 벡터 유사도만 사용한다. Elasticsearch 키워드 검색은 독립적으로 실행할 수 있지만 정책명, 정확한 금액이나 고유명사 검색 결과를 Vector 결과와 RRF로 결합하는 단계는 아직 연결되지 않았다.
+첫째, Vector와 Keyword 결과는 Weighted RRF로 결합하지만 별도의 cross-encoder reranker는 아직 사용하지 않는다. 가중치는 Hybrid 전용 평가 결과에 따라 추가 조정할 수 있다.
 
 둘째, 정책 PDF는 수집 시점의 스냅샷이다. 공고 변경이나 모집 종료를 자동으로 감지하고 다시 적재하는 수집 스케줄러가 없다. 따라서 생성된 보고서는 신청 전 최신 공식 공고를 다시 확인해야 한다.
 
@@ -483,4 +498,4 @@ API 호출 없이 입력 스키마만 확인하려면 다음 명령을 사용한
 
 ## 20. 한 문장으로 정리한 현재 동작
 
-현재 시스템은 사용자의 독립 목적, 지역, 소득, 보유자금, 일정, 주거 선호, 우선순위와 자유 입력을 받아 안내서·실제 사례·지원정책 PDF가 저장된 PGVector를 검색하고, 검색된 파일명·페이지·본문만을 LangChain을 통해 Groq LLM에 전달하여 출처가 표시된 3,000자 이상의 일곱 부분 서술형 자취 독립 보고서를 JSON으로 저장한다.
+현재 시스템은 사용자의 독립 목적, 지역, 소득, 보유자금, 주거비 조건, 일정, 주거 선호, 우선순위와 자유 입력을 받아 PGVector와 Elasticsearch를 함께 검색하고, Weighted RRF로 선별한 실제 파일명·페이지·본문만을 LangChain을 통해 Groq LLM에 전달하여 독립 적절성, 집 찾기와 계약, 이사와 정착, 주의점, 정부·지자체 정책이 포함된 2,400자 이상의 다섯 부분 존댓말 서술형 보고서를 JSON으로 저장한다. 예산은 독립 가능성을 보조하는 근거로만 사용한다.

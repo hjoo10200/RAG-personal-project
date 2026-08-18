@@ -4,7 +4,7 @@
 
 이 문서는 기존 PGVector Vector-only 검색을 보존하면서 Elasticsearch BM25 키워드 검색을 추가한 현재 구현의 흐름을 설명한다. PDF가 Elasticsearch 인덱스에 들어가는 과정, 사용자가 검색어를 입력했을 때 결과가 반환되는 과정, 자동 평가 결과가 어디에 저장되는지를 코드 기준으로 정리한다.
 
-이번 구현은 하이브리드 RAG의 완성이 아니다. 현재는 Vector 검색과 Keyword 검색을 서로 독립적으로 실행하고 평가할 수 있는 단계다. 두 결과를 RRF로 결합해 실제 보고서 생성에 사용하는 작업은 다음 단계다.
+이 문서는 Elasticsearch Keyword 검색 자체의 구현 이력을 설명한다. 이후 단계에서 Vector와 Keyword 순위를 Weighted RRF로 결합하는 Hybrid 검색이 구현되어 현재 실제 보고서 생성 경로에 사용된다. 결합 방식은 `HYBRID_RAG_PIPELINE.md`를 참고한다.
 
 ## 먼저 알아야 할 핵심 개념
 
@@ -76,7 +76,7 @@ PGVector
 Elasticsearch + BM25
 → 정책명·지역명·계약 용어가 실제로 포함된 청크 검색
 
-다음 단계의 RRF
+현재 구현된 Weighted RRF
 → 두 검색 결과의 순위를 안전하게 결합
 ```
 
@@ -94,8 +94,8 @@ flowchart LR
     CHUNK --> ESINDEX["Elasticsearch 텍스트 인덱스"]
     ESINDEX --> BM25["BM25 키워드 검색"]
 
-    VECTOR -. "다음 단계: RRF" .-> HYBRID["Hybrid 검색 결과"]
-    BM25 -. "다음 단계: RRF" .-> HYBRID
+    VECTOR --> HYBRID["Weighted RRF Hybrid 검색 결과"]
+    BM25 --> HYBRID
 ```
 
 두 검색 시스템의 역할은 다음과 같다.
@@ -104,7 +104,7 @@ flowchart LR
 |---|---|---|---|
 | Vector 검색 | PostgreSQL PGVector | 표현이 달라도 의미가 유사한 청크 검색 | 실제 RAG 보고서 생성에 사용 중 |
 | Keyword 검색 | Elasticsearch | 정책명, 계약 용어, 지역명 등 정확한 단어 검색 | 독립 적재·검색·평가 구현 완료 |
-| Hybrid 검색 | PGVector + Elasticsearch | 두 검색 순위를 결합 | 아직 미구현 |
+| Hybrid 검색 | PGVector + Elasticsearch | 두 검색 순위를 결합 | 실제 보고서 생성 경로에 적용 완료 |
 
 ## 3. Vector-only 기준선 보존
 
@@ -500,9 +500,9 @@ evaluation/keyword_structured/retrieval_summary.json
 | 정수 순번 ID | PGVector와 동일한 결정적 `chunk_id` |
 | 저장 건수 검증 없음 | 청크·bulk·실제 count 일치 검증 |
 
-## 18. 다음 구현 단계
+## 18. 이후 구현된 단계
 
-다음 단계에서는 사용자가 Elasticsearch를 새 매핑으로 적재하고 구조화 Keyword 평가를 실행한다. 개선 결과가 확인되면 Vector와 Keyword 후보를 각각 더 넓게 가져온 뒤 `chunk_id`를 기준으로 중복을 합치고 두 검색기 사이의 RRF 점수를 계산한다.
+구조화 Keyword 평가 이후 Vector와 Keyword 후보를 각각 더 넓게 가져오고, `chunk_id`를 기준으로 중복을 합친 뒤 두 검색기 사이의 Weighted RRF 점수를 계산하는 Hybrid 검색을 구현했다.
 
 ```text
 Vector Top-N ─┐
@@ -510,4 +510,4 @@ Vector Top-N ─┐
 Keyword Top-N ┘
 ```
 
-RRF 구현 후에도 Vector-only와 Keyword-only 결과는 유지한다. 세 결과를 같은 평가 데이터로 비교한 뒤 Hybrid 결과가 실제 보고서 생성 경로의 `retrieve_real_evidence()`를 대체할지 결정한다.
+Vector-only와 Keyword-only 결과는 비교 기준으로 유지한다. 실제 보고서 생성 경로는 `retrieve_hybrid_evidence()`를 사용하며, 자세한 가중치·선별 방식·실행 명령은 `HYBRID_RAG_PIPELINE.md`에 정리되어 있다.

@@ -12,7 +12,16 @@
     "move_timeline": "3개월 이내",
     "housing_preference": "월세",
     "priorities": ["통근시간", "월 고정비", "안전"],
-    "additional_context": "첫 자취이며 보증금과 월 생활비 수준을 가장 걱정하고 있다."
+    "additional_context": "첫 자취이며 보증금과 월 생활비 수준을 가장 걱정하고 있다.",
+    "target_deposit_krw": 5000000,
+    "target_monthly_rent_krw": 600000,
+    "expected_management_fee_krw": 100000,
+    "other_monthly_fixed_cost_krw": 300000,
+    "monthly_debt_payment_krw": 0,
+    "estimated_food_cost_krw": 350000,
+    "estimated_transport_cost_krw": 150000,
+    "estimated_utilities_and_communications_krw": 150000,
+    "estimated_moving_cost_krw": 500000
   },
   "retrieved_context": [
     {

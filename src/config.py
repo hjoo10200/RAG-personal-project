@@ -136,7 +136,7 @@ class GenerationSettings:
     api_key: str = os.getenv("GROQ_API_KEY", "")
     model: str = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
     temperature: float = float(os.getenv("GROQ_TEMPERATURE", "0"))
-    max_tokens: int = int(os.getenv("GROQ_MAX_TOKENS", "3500"))
+    max_tokens: int = int(os.getenv("GROQ_MAX_TOKENS", "2000"))
     timeout_seconds: float = float(os.getenv("GROQ_TIMEOUT_SECONDS", "120"))
     max_retries: int = int(os.getenv("GROQ_MAX_RETRIES", "2"))
     reasoning_effort: str = os.getenv("GROQ_REASONING_EFFORT", "low")
