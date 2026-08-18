@@ -2,6 +2,8 @@
 
 `retrieval_questions.jsonl`은 현재 PDF 17개의 Vector 검색 품질을 확인하기 위한 초기 평가 세트다.
 
+2026-08-17 Vector-only 최초 결과는 `baselines/vector_only_2026-08-17/`에 질문과 함께 복사하여 보존했다. 이후 Elasticsearch와 Hybrid 평가 결과는 이 기준선 파일을 덮어쓰지 않는다.
+
 ## 구성
 
 - `guides`: G01~G05, 5개

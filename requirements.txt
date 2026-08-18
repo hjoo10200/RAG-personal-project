@@ -35,7 +35,6 @@ psycopg[binary]==3.3.4
 pgvector==0.3.6
 langchain-postgres==0.0.16
 
-
 # Elasticsearch
 # langchain-elasticsearch -> langchain v1과 호환 이슈 
 elasticsearch==8.13.0

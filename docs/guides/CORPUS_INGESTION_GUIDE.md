@@ -2,6 +2,8 @@
 
 이 프로젝트는 하나의 PostgreSQL 데이터베이스 안에서 PDF를 다음 세 PGVector 컬렉션으로 분리한다.
 
+PGVector, 임베딩 벡터와 코사인 유사도 검색의 개념부터 적재·검색 내부 흐름까지 확인하려면 [PGVector 적재 파이프라인 개선 보고서](../reports/INGESTION_PIPELINE_REPORT.md)를 먼저 참고한다.
+
 | corpus | PDF 위치 | PGVector 컬렉션 | 청킹 |
 |---|---|---|---:|
 | `guides` | `knowledge_base/pdfs/guides` | `youth_independence_guides` | 800/120 |

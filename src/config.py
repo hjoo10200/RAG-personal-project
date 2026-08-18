@@ -163,3 +163,40 @@ class GenerationSettings:
             raise ValueError(
                 "GROQ_REASONING_EFFORT는 low, medium, high 중 하나여야 합니다."
             )
+
+
+@dataclass(frozen=True)
+class ElasticsearchSettings:
+    """Elasticsearch keyword-index settings."""
+
+    url: str = os.getenv("ELASTICSEARCH_URL", "http://localhost:9200")
+    username: str = os.getenv("ELASTICSEARCH_USERNAME", "")
+    password: str = os.getenv("ELASTICSEARCH_PASSWORD", "")
+    verify_certs: bool = os.getenv(
+        "ELASTICSEARCH_VERIFY_CERTS", "false"
+    ).lower() in {"1", "true", "yes"}
+    request_timeout: float = float(
+        os.getenv("ELASTICSEARCH_REQUEST_TIMEOUT", "30")
+    )
+    index_prefix: str = os.getenv(
+        "ELASTICSEARCH_INDEX_PREFIX", "youth_independence"
+    )
+
+    def validate(self) -> None:
+        if not self.url.startswith(("http://", "https://")):
+            raise ValueError(
+                "ELASTICSEARCH_URL은 http:// 또는 https://로 시작해야 합니다."
+            )
+        if bool(self.username) != bool(self.password):
+            raise ValueError(
+                "Elasticsearch 인증을 사용하려면 username과 password를 모두 설정하세요."
+            )
+        if self.request_timeout <= 0:
+            raise ValueError("ELASTICSEARCH_REQUEST_TIMEOUT은 0보다 커야 합니다.")
+        if not self.index_prefix.strip():
+            raise ValueError("ELASTICSEARCH_INDEX_PREFIX는 비어 있을 수 없습니다.")
+
+    def index_name(self, corpus: str) -> str:
+        if corpus not in CORPUS_NAMES:
+            raise ValueError(f"지원하지 않는 corpus입니다: {corpus}")
+        return f"{self.index_prefix}_{corpus}_keywords"
