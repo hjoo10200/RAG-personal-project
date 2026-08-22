@@ -1,0 +1,67 @@
+{
+  "evaluation_status": "completed",
+  "evaluated_rows": 1,
+  "low_score_threshold": 0.7,
+  "low_score_rows": 1,
+  "metrics": {
+    "answer_relevancy": {
+      "mean": 0.585109,
+      "median": 0.585109,
+      "min": 0.585109,
+      "max": 0.585109,
+      "valid_count": 1,
+      "failure_count": 0
+    },
+    "faithfulness": {
+      "mean": 0.170732,
+      "median": 0.170732,
+      "min": 0.170732,
+      "max": 0.170732,
+      "valid_count": 1,
+      "failure_count": 0
+    },
+    "context_recall": {
+      "mean": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "valid_count": 1,
+      "failure_count": 0
+    },
+    "context_precision": {
+      "mean": 0.784722,
+      "median": 0.784722,
+      "min": 0.784722,
+      "max": 0.784722,
+      "valid_count": 1,
+      "failure_count": 0
+    }
+  },
+  "low_score_sample_ids": [
+    "scenario_employed_suwon_to_seoul"
+  ],
+  "config": {
+    "evaluated_at": "2026-08-22T15:25:17.111820+00:00",
+    "input_file": "D:\\RAG-personal-project\\evaluation\\ragas\\ragas_response_dataset.jsonl",
+    "judge_model": "gpt-5.4",
+    "judge_reasoning_effort": "low",
+    "embedding_model": "text-embedding-3-small",
+    "generation_models": [
+      "gpt-5.4-mini"
+    ],
+    "normalization": "control_only",
+    "run_config": {
+      "timeout": 180,
+      "max_retries": 2,
+      "max_workers": 1,
+      "batch_size": null,
+      "raise_exceptions": true
+    },
+    "input_audit": {
+      "input_rows": 5,
+      "evaluated_rows": 1,
+      "skipped_failed_rows": 1,
+      "skipped_other_role_rows": 0
+    }
+  }
+}

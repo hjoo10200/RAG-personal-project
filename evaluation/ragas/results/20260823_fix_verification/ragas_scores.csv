@@ -1,0 +1,2 @@
+﻿sample_id,evaluation_focus,answer_relevancy,faithfulness,context_recall,context_precision,metric_failure_count,min_score,diagnosis,is_low_score,generation_model,judge_model,retrieved_context_count,reference_context_count
+scenario_employed_suwon_to_seoul,"개인화, 실행 순서, 계약 안전, 서울 정책 근거성",0.5851086785020168,0.17073170731707318,0.0,0.7847222222091434,0,0.0,검색과 생성 모두 점검,True,gpt-5.4-mini,gpt-5.4,11,9

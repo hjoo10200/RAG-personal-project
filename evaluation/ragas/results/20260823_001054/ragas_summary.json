@@ -1,0 +1,71 @@
+{
+  "evaluation_status": "failed",
+  "failure_reason": "RAGAS 0.3.9가 gpt-5.4에 지원되지 않는 temperature=0.3을 전달했고 예외 숨김 설정으로 모든 지표가 NaN이 됨",
+  "evaluated_rows": 4,
+  "low_score_threshold": 0.7,
+  "low_score_rows": 4,
+  "metrics": {
+    "answer_relevancy": {
+      "mean": null,
+      "median": null,
+      "min": null,
+      "max": null,
+      "valid_count": 0,
+      "failure_count": 4
+    },
+    "faithfulness": {
+      "mean": null,
+      "median": null,
+      "min": null,
+      "max": null,
+      "valid_count": 0,
+      "failure_count": 4
+    },
+    "context_recall": {
+      "mean": null,
+      "median": null,
+      "min": null,
+      "max": null,
+      "valid_count": 0,
+      "failure_count": 4
+    },
+    "context_precision": {
+      "mean": null,
+      "median": null,
+      "min": null,
+      "max": null,
+      "valid_count": 0,
+      "failure_count": 4
+    }
+  },
+  "low_score_sample_ids": [
+    "scenario_employed_suwon_to_seoul",
+    "scenario_jobseeker_low_cash_urgent_move",
+    "scenario_graduate_student_to_seoul",
+    "scenario_incomplete_cost_inputs"
+  ],
+  "config": {
+    "evaluated_at": "2026-08-22T15:10:54.283443+00:00",
+    "input_file": "D:\\RAG-personal-project\\evaluation\\ragas\\ragas_response_dataset.jsonl",
+    "judge_model": "gpt-5.4",
+    "judge_reasoning_effort": "low",
+    "embedding_model": "text-embedding-3-small",
+    "generation_models": [
+      "gpt-5.4-mini"
+    ],
+    "normalization": "control_only",
+    "run_config": {
+      "timeout": 180,
+      "max_retries": 2,
+      "max_workers": 4,
+      "batch_size": null,
+      "raise_exceptions": false
+    },
+    "input_audit": {
+      "input_rows": 5,
+      "evaluated_rows": 4,
+      "skipped_failed_rows": 1,
+      "skipped_other_role_rows": 0
+    }
+  }
+}
