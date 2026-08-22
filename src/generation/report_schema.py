@@ -108,27 +108,8 @@ class RagRequest(StrictModel):
     situation: UserSituation
 
 
-class NarrativeSectionDraft(StrictModel):
-    """Two prose paragraphs used internally to assemble one report section."""
-
-    analysis_paragraph: str = Field(
-        description="사용자 상황과 검색 근거의 의미를 존댓말로 설명하는 상세한 서술 문단"
-    )
-    action_paragraph: str = Field(
-        description="실제 확인 및 행동 방법과 그 이유를 존댓말로 설명하는 상세한 서술 문단"
-    )
-
-
-class AssessmentSectionDraft(StrictModel):
-    """One concise assessment paragraph so budget calculations are not repeated."""
-
-    assessment_paragraph: str = Field(
-        description="독립 목적과 우선순위 중심의 판단 및 보조적인 예산 판단을 담은 존댓말 문단"
-    )
-
-
 class NarrativeDraft(StrictModel):
-    """Internal generation schema; rendered into one NarrativeReport body."""
+    """Internal grounded draft; evidence IDs are removed from the user report."""
 
     report_title: str
     independence_assessment: Literal[
@@ -136,11 +117,30 @@ class NarrativeDraft(StrictModel):
         "조건 확인 후 독립이 적절함",
         "현재는 독립 연기 또는 조건 조정이 적절함",
     ]
-    situation_and_assessment: AssessmentSectionDraft
-    housing_search_and_contract: NarrativeSectionDraft
-    moving_and_settlement: NarrativeSectionDraft
-    cautions_before_and_after: NarrativeSectionDraft
-    support_policies: NarrativeSectionDraft
+    assessment_paragraph: str = Field(
+        description="사용자 상황을 연결한 판단 이유와 판단을 바꿀 조건을 담은 존댓말 문단",
+    )
+    assessment_evidence_ids: list[str] = Field(
+        description="판단 문단에 실제 사용한 evidence_id 목록"
+    )
+    execution_plan_paragraph: str = Field(
+        description="집 탐색부터 계약, 이사, 입주 후까지 사용자에게 맞춘 실행 순서 문단",
+    )
+    execution_evidence_ids: list[str] = Field(
+        description="실행 문단에 실제 사용한 evidence_id 목록"
+    )
+    risk_paragraph: str = Field(
+        description="사용자 상황에서 가능성이 큰 위험과 조건별 대응을 설명하는 문단",
+    )
+    risk_evidence_ids: list[str] = Field(
+        description="위험 문단에 실제 사용한 evidence_id 목록"
+    )
+    policy_paragraph: str = Field(
+        description="적합도가 높은 지원정책 2~3개와 확인할 자격을 설명하는 문단",
+    )
+    policy_evidence_ids: list[str] = Field(
+        description="정책 문단에 실제 사용한 policies evidence_id 목록",
+    )
 
 
 class NarrativeReport(StrictModel):
@@ -155,30 +155,27 @@ class NarrativeReport(StrictModel):
     @classmethod
     def validate_report_sections(cls, body: str) -> str:
         headings = [line for line in body.splitlines() if line.startswith("## ")]
-        if len(headings) < 5:
-            raise ValueError("보고서에는 5개 이상의 ## 소제목이 필요합니다.")
-        if len(body) < 2400:
-            raise ValueError("상세 서술형 보고서 본문은 2,400자 이상이어야 합니다.")
+        if len(headings) != 4:
+            raise ValueError("보고서에는 정확히 4개의 ## 소제목이 필요합니다.")
+        if not 800 <= len(body) <= 3700:
+            raise ValueError("보고서 본문은 800자 이상 3,700자 이하여야 합니다.")
 
         sections = re.split(r"(?m)^## .+\n", body)[1:]
-        if len(sections) < 5:
+        if len(sections) != 4:
             raise ValueError("소제목별 보고서 본문을 확인할 수 없습니다.")
         for index, section in enumerate(sections, start=1):
             paragraphs = [part.strip() for part in section.split("\n\n") if part.strip()]
-            minimum_paragraphs = 1 if index == 1 else 2
-            if len(paragraphs) < minimum_paragraphs:
-                raise ValueError(
-                    f"{index}번째 소제목에는 {minimum_paragraphs}개 이상의 서술 문단이 필요합니다."
-                )
+            if len(paragraphs) != 1:
+                raise ValueError(f"{index}번째 소제목에는 서술 문단 하나만 있어야 합니다.")
 
         list_pattern = re.compile(r"(?m)^(?!## )\s*(?:[-*+] |\d+[.)] )")
         if list_pattern.search(body):
             raise ValueError("서술형 보고서 본문에는 목록 형식을 사용할 수 없습니다.")
 
         required_topics = {
-            "부동산·계약": ("부동산", "계약"),
+            "계약": ("계약",),
             "이사": ("이사",),
-            "주의점": ("주의", "안전"),
+            "위험·주의": ("위험", "주의", "안전"),
             "지원정책": ("지원", "정책"),
         }
         missing = [
@@ -188,13 +185,8 @@ class NarrativeReport(StrictModel):
         ]
         if missing:
             raise ValueError(f"보고서 필수 주제가 누락되었습니다: {', '.join(missing)}")
-        if "[출처:" not in body:
-            raise ValueError("보고서 본문에 최소 하나 이상의 출처 표시가 필요합니다.")
-        citation_markers = re.findall(r"\[출처:[^\]]+\]", body)
-        citation_pattern = re.compile(r"\[출처:\s*[^,\]]+,\s*p\.\d+\]")
-        malformed = [
-            marker for marker in citation_markers if not citation_pattern.fullmatch(marker)
-        ]
-        if malformed:
-            raise ValueError(f"잘못된 출처 표시 형식이 있습니다: {malformed}")
+        if "[출처:" in body or re.search(r"\b[CGP]\d+\b", body):
+            raise ValueError("사용자용 보고서에는 출처나 내부 evidence_id를 표시할 수 없습니다.")
+        if ".pdf" in body.lower():
+            raise ValueError("사용자용 보고서에는 원본 PDF 파일명을 표시할 수 없습니다.")
         return body

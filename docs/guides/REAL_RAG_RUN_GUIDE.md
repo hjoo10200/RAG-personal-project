@@ -1,6 +1,6 @@
 # 실제 Hybrid RAG 실행
 
-이 명령은 합성 `TEST_*` 문서를 사용하지 않는다. 사용자 상황만 입력받아 실제 `guides`, `cases`, `policies` PGVector 컬렉션과 Elasticsearch 인덱스를 함께 검색한다. 두 검색 순위는 Weighted RRF로 결합되며, 최종 PDF 청크만 Groq 보고서 생성에 전달된다.
+이 명령은 합성 `TEST_*` 문서를 사용하지 않는다. 사용자 상황만 입력받아 실제 `guides`, `cases`, `policies` PGVector 컬렉션과 Elasticsearch 인덱스를 함께 검색한다. 두 검색 순위는 Weighted RRF로 결합되며, 최종 PDF 청크만 OpenAI `gpt-5.4-mini` 보고서 생성에 전달된다.
 
 실행 전 PostgreSQL·PGVector와 Elasticsearch가 모두 실행 중이고 각 코퍼스가 양쪽 저장소에 적재되어 있어야 한다.
 

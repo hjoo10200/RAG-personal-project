@@ -32,10 +32,16 @@ def rebuild_collection(
     documents: list[Document],
     ids: Sequence[str],
 ) -> PGVector:
+    # langchain_pg_embedding.id는 컬렉션 내부 키가 아니라 테이블 전체의
+    # 기본키다. 같은 PDF 청크를 서로 다른 임베딩 컬렉션에 저장할 때 원본
+    # chunk_id를 그대로 사용하면 기존 컬렉션 행이 갱신되고 새 컬렉션은
+    # 비게 된다. DB 저장 ID만 컬렉션명으로 구분하고, 검색 결과 결합에
+    # 사용하는 metadata["chunk_id"]는 변경하지 않는다.
+    storage_ids = [f"{settings.collection_name}:{chunk_id}" for chunk_id in ids]
     return PGVector.from_documents(
         documents=documents,
         embedding=embeddings,
-        ids=list(ids),
+        ids=storage_ids,
         connection=settings.database_url,
         collection_name=settings.collection_name,
         distance_strategy=DistanceStrategy.COSINE,

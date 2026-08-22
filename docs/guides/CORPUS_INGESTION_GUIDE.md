@@ -6,11 +6,11 @@ PGVector, 임베딩 벡터와 코사인 유사도 검색의 개념부터 적재�
 
 | corpus | PDF 위치 | PGVector 컬렉션 | 청킹 |
 |---|---|---|---:|
-| `guides` | `knowledge_base/pdfs/guides` | `youth_independence_guides` | 800/120 |
-| `cases` | `knowledge_base/pdfs/cases` | `youth_independence_cases` | 1000/150 |
-| `policies` | `knowledge_base/pdfs/policies` | `youth_independence_policies` | 900/150 |
+| `guides` | `knowledge_base/pdfs/guides` | `youth_independence_guides_openai_3_small` | 800/120 |
+| `cases` | `knowledge_base/pdfs/cases` | `youth_independence_cases_openai_3_small` | 1000/150 |
+| `policies` | `knowledge_base/pdfs/policies` | `youth_independence_policies_openai_3_small` | 900/150 |
 
-청킹 값은 `청크 최대 문자 수/앞뒤 중첩 문자 수`다. 세 컬렉션은 모두 같은 `intfloat/multilingual-e5-small` 임베딩 모델과 384차원 벡터를 사용한다.
+청킹 값은 `청크 최대 문자 수/앞뒤 중첩 문자 수`다. 세 컬렉션은 모두 OpenAI `text-embedding-3-small`과 1,536차원 벡터를 사용한다. 기존 384차원 E5 컬렉션은 삭제하지 않으며 새 컬렉션과 혼용하지 않는다.
 
 ## 실행 위치
 
@@ -58,13 +58,21 @@ docker compose ps
 
 ## 3. PDF 전체 적재
 
+실제 임베딩 호출 전 `.env`에 OpenAI API 키를 입력한다.
+
+```dotenv
+OPENAI_API_KEY=sk-...
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_DIMENSIONS=1536
+```
+
 세 컬렉션을 한 번에 순차 적재하려면 다음 명령을 실행한다.
 
 ```powershell
 .venv\Scripts\python.exe -m src.ingestion.ingest --corpus all
 ```
 
-처리 순서는 `guides → cases → policies`다. 임베딩 모델은 처음에 한 번만 메모리에 로드하고 세 컬렉션에서 재사용한다.
+처리 순서는 `guides → cases → policies`다. LangChain `OpenAIEmbeddings` 클라이언트를 한 번 만들고 세 컬렉션에서 재사용한다.
 
 개별 컬렉션만 다시 만들고 싶다면 다음 중 하나만 실행한다.
 
@@ -74,12 +82,12 @@ docker compose ps
 .venv\Scripts\python.exe -m src.ingestion.ingest --corpus policies
 ```
 
-적재 명령은 선택한 컬렉션을 삭제한 뒤 새로 만든다. 예를 들어 `--corpus cases`는 `youth_independence_cases`만 재구축하며 `guides`와 `policies` 컬렉션에는 영향을 주지 않는다.
+적재 명령은 선택한 새 컬렉션만 삭제한 뒤 다시 만든다. 예를 들어 `--corpus cases`는 `youth_independence_cases_openai_3_small`만 재구축하며 다른 컬렉션과 기존 E5 컬렉션에는 영향을 주지 않는다.
 
 완료 시 각 코퍼스에 대해 다음 형태의 검증 로그가 출력되어야 한다.
 
 ```text
-[verify] corpus=cases, collection=youth_independence_cases, stored_chunks=...
+[verify] corpus=cases, collection=youth_independence_cases_openai_3_small, stored_chunks=...
 ```
 
 생성된 청크 수와 DB에 저장된 행 수가 다르면 프로그램이 오류로 종료된다.
@@ -117,15 +125,15 @@ docker compose ps
 기본값을 바꾸려면 `.env.example`을 참고해 프로젝트 루트의 `.env`에 필요한 항목만 추가한다.
 
 ```dotenv
-GUIDES_COLLECTION=youth_independence_guides
+GUIDES_COLLECTION=youth_independence_guides_openai_3_small
 GUIDES_CHUNK_SIZE=800
 GUIDES_CHUNK_OVERLAP=120
 
-CASES_COLLECTION=youth_independence_cases
+CASES_COLLECTION=youth_independence_cases_openai_3_small
 CASES_CHUNK_SIZE=1000
 CASES_CHUNK_OVERLAP=150
 
-POLICIES_COLLECTION=youth_independence_policies
+POLICIES_COLLECTION=youth_independence_policies_openai_3_small
 POLICIES_CHUNK_SIZE=900
 POLICIES_CHUNK_OVERLAP=150
 ```

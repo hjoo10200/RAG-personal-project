@@ -2,7 +2,7 @@
 
 ## 1. 문서 목적
 
-이 문서는 청년 자취 독립 플래너 RAG 프로젝트에 현재 구현된 기능을 코드 기준으로 설명한다. 원본 PDF가 어떻게 청크와 벡터·키워드 인덱스로 변환되는지, 사용자가 어떤 값을 입력하는지, PGVector와 Elasticsearch 결과가 어떻게 결합되어 Groq LLM에 전달되는지, 최종적으로 어떤 JSON이 생성되는지를 하나의 흐름으로 연결한다.
+이 문서는 청년 자취 독립 플래너 RAG 프로젝트에 현재 구현된 기능을 코드 기준으로 설명한다. 원본 PDF가 어떻게 청크와 벡터·키워드 인덱스로 변환되는지, 사용자가 어떤 값을 입력하는지, PGVector와 Elasticsearch 결과가 어떻게 결합되어 OpenAI LLM에 전달되는지, 최종적으로 어떤 JSON이 생성되는지를 하나의 흐름으로 연결한다.
 
 현재 시스템의 핵심 결과물은 사용자의 독립 상황을 입력받아 실제 PDF 검색 근거가 포함된 상세한 자취 준비 보고서를 JSON으로 생성하는 것이다. JSON 안에는 보고서 제목과 Markdown 형식의 서술형 본문이 들어간다.
 
@@ -20,7 +20,7 @@
 - 사용자 상황을 코퍼스별 검색 질의로 변환
 - PGVector와 Elasticsearch 결과의 Weighted RRF 결합
 - 실제 Hybrid 검색 근거 선별 및 JSON 저장
-- LangChain과 Groq를 이용한 상세 서술형 보고서 생성
+- LangChain과 OpenAI를 이용한 상세 서술형 보고서 생성
 - LLM 출력 구조, 본문 길이, 문단 구성과 출처에 대한 후처리 검증
 
 실제 보고서 생성 경로는 임베딩 기반 Vector 검색과 Elasticsearch BM25 키워드 검색을 Weighted RRF로 결합한다. 별도의 reranker, Corrective RAG, 정책 자동 최신화, 웹 UI, 차트 생성, HTML·PDF 렌더링은 아직 구현되지 않았다.
@@ -32,7 +32,7 @@ flowchart TD
     A["원본 PDF 17개"] --> B["PyPDFLoader 페이지 추출"]
     B --> C["텍스트 정리·메타데이터 추가"]
     C --> D["RecursiveCharacterTextSplitter 청킹"]
-    D --> E["multilingual-e5-small 임베딩"]
+    D --> E["text-embedding-3-small 임베딩"]
     E --> F["PGVector 3개 컬렉션"]
     D --> K["Elasticsearch 3개 키워드 인덱스"]
 
@@ -45,7 +45,7 @@ flowchart TD
     H --> R["관련 청크 검색·중복 제거"]
     R --> J["GenerationRequest 구성 및 근거 JSON 저장"]
     J --> P["LangChain ChatPromptTemplate"]
-    P --> L["Groq openai/gpt-oss-120b"]
+    P --> L["OpenAI gpt-5.4-mini"]
     L --> S["Strict NarrativeDraft"]
     S --> V["본문 조립·출처 검증"]
     V --> O["NarrativeReport JSON"]
@@ -80,7 +80,7 @@ src/
 
 | 파일 | 역할 |
 |---|---|
-| `src/config.py` | 환경변수, PDF 경로, 컬렉션 이름, 청킹 크기, Groq 설정 관리 |
+| `src/config.py` | 환경변수, PDF 경로, 컬렉션 이름, 청킹 크기, OpenAI 설정 관리 |
 | `src/common/embedding_factory.py` | E5 임베딩 모델 로딩과 문서·질의 임베딩 옵션 설정 |
 | `src/common/vector_store.py` | DB 연결 검사, 컬렉션 재구축, 기존 컬렉션 열기, 행 수 확인 |
 | `src/common/elasticsearch_store.py` | Elasticsearch 연결, BM25 인덱스 적재와 키워드 검색 |
@@ -93,7 +93,7 @@ src/
 | `src/retrieval/evaluate_retrieval.py` | 평가 질문 전체를 실행하고 CSV·JSON 평가 결과 생성 |
 | `src/retrieval/rag_pipeline.py` | 사용자 상황을 검색 질의로 만들고 실제 보고서 근거를 선별 |
 | `src/generation/report_schema.py` | 사용자 입력, 검색 근거, LLM 내부 출력과 최종 출력 스키마 정의 |
-| `src/generation/report_generator.py` | LangChain 프롬프트, Groq 호출, 보고서 조립과 출처 검증 |
+| `src/generation/report_generator.py` | LangChain 프롬프트, OpenAI 호출, 보고서 조립과 출처 검증 |
 | `src/generation/generate_report.py` | 검색 근거를 이미 포함한 입력으로 생성 단계만 시험하는 CLI |
 | `src/run_rag.py` | 사용자 입력부터 검색·근거 저장·보고서 생성까지 연결하는 실제 RAG CLI |
 
@@ -103,9 +103,9 @@ src/
 
 | 코퍼스 | 역할 | 기본 컬렉션 | 기본 청킹 |
 |---|---|---|---:|
-| `guides` | 계약, 이사, 예산 등 실행 지식 | `youth_independence_guides` | 800자, 120자 중첩 |
-| `cases` | 실제 청년 경험과 생활비·주거 실태 | `youth_independence_cases` | 1,000자, 150자 중첩 |
-| `policies` | 공식 지원정책 공고와 시행계획 | `youth_independence_policies` | 900자, 150자 중첩 |
+| `guides` | 계약, 이사, 예산 등 실행 지식 | `youth_independence_guides_openai_3_small` | 800자, 120자 중첩 |
+| `cases` | 실제 청년 경험과 생활비·주거 실태 | `youth_independence_cases_openai_3_small` | 1,000자, 150자 중첩 |
+| `policies` | 공식 지원정책 공고와 시행계획 | `youth_independence_policies_openai_3_small` | 900자, 150자 중첩 |
 
 현재 지식베이스에는 사례 6개, 안내서 4개, 정책 7개로 총 17개의 활성 PDF가 있다. `knowledge_base/archive/`는 보관용이며 적재 대상이 아니다.
 
@@ -151,25 +151,23 @@ CLI에서는 적재 대상을 선택한다.
 
 LangChain의 `RecursiveCharacterTextSplitter`를 사용한다. 제목, 빈 줄, 줄바꿈, 문장 끝, 한국어 종결 표현, 공백 순으로 가능한 경계를 찾은 후 코퍼스별 최대 크기에 맞춰 나눈다.
 
-청크 본문은 연속된 공백을 하나로 정규화한다. 청크마다 페이지 안 순번인 `chunk_index`, 문자 수인 `character_count`, 고유 식별자인 `chunk_id`를 추가한다. `chunk_id`는 코퍼스, 문서 해시, 페이지 번호, 청크 순번과 정규화된 본문을 결합한 뒤 SHA-256으로 만든다.
+청크 본문은 연속된 공백을 하나로 정규화한다. 청크마다 페이지 안 순번인 `chunk_index`, 문자 수인 `character_count`, 고유 식별자인 `chunk_id`를 추가한다. `chunk_id`는 코퍼스, 문서 해시, 페이지 번호, 청크 순번과 정규화된 본문을 결합한 뒤 SHA-256으로 만든다. 이 값은 PGVector와 Elasticsearch 결과를 결합하는 논리 식별자다. PGVector 행의 실제 ID는 서로 다른 임베딩 컬렉션 사이의 충돌을 막기 위해 `<collection_name>:<chunk_id>` 형식으로 저장한다.
 
 ### 6.4 임베딩
 
-현재 임베딩 모델은 `intfloat/multilingual-e5-small`이다.
+현재 임베딩 모델은 OpenAI `text-embedding-3-small`이다.
 
-- 벡터 차원: 384차원
-- 기본 실행 장치: CPU
-- 기본 배치 크기: 8
-- 문서 접두어: `passage: `
-- 검색어 접두어: `query: `
-- 벡터 정규화: 사용
+- 벡터 차원: 1,536차원
+- 기본 API 배치 크기: 64
+- API 타임아웃: 120초
+- API 재시도: 3회
 - 거리 전략: 코사인 거리
 
-기본값은 로컬 캐시만 사용하도록 설정되어 있다. 모델이 로컬에 없으면 `EMBEDDING_LOCAL_FILES_ONLY=false`로 한 번 내려받아야 한다.
+임베딩은 로컬 모델을 내려받지 않고 `OPENAI_API_KEY`를 사용해 OpenAI API에서 생성한다. 기존 384차원 E5 컬렉션은 보존하며, 1,536차원 벡터는 이름이 다른 새 컬렉션에 적재한다.
 
 ### 6.5 PGVector 저장 출력
 
-LangChain의 `PGVector.from_documents`가 청크 본문, 384차원 벡터와 JSONB 메타데이터를 저장한다. LangChain이 사용하는 주요 테이블은 `langchain_pg_collection`과 `langchain_pg_embedding`이다.
+LangChain의 `PGVector.from_documents`가 청크 본문, 1,536차원 벡터와 JSONB 메타데이터를 저장한다. LangChain이 사용하는 주요 테이블은 `langchain_pg_collection`과 `langchain_pg_embedding`이다.
 
 선택한 컬렉션에는 `pre_delete_collection=True`가 적용된다. 따라서 해당 코퍼스를 다시 적재하면 그 컬렉션을 삭제하고 새로 구축한다. 다른 두 코퍼스 컬렉션은 변경하지 않는다.
 
@@ -304,28 +302,27 @@ LLM 입력 크기를 통제하기 위해 각 근거 본문은 공백을 정규�
 
 이 객체는 LLM에 전달되기 전에 `--evidence-output`으로 지정한 JSON 파일에 저장된다. 따라서 어떤 사용자 입력과 어떤 검색 근거로 보고서를 만들었는지 나중에 확인할 수 있다.
 
-`--retrieve-only`를 사용하면 여기서 실행을 종료한다. 이 모드는 Groq API를 호출하지 않고 실제 검색 결과만 검증할 때 사용한다.
+`--retrieve-only`를 사용하면 여기서 실행을 종료한다. 이 모드는 생성 모델을 호출하지 않고 실제 검색 결과만 검증할 때 사용한다. 다만 벡터 검색 질의를 만들기 위한 OpenAI 임베딩 API 호출은 발생한다.
 
-## 11. LangChain과 Groq 보고서 생성
+## 11. LangChain과 OpenAI 보고서 생성
 
 보고서 생성에는 다음 LangChain 요소가 사용된다.
 
 - `ChatPromptTemplate`: 시스템 지침과 사용자·검색 근거 JSON 결합
-- `ChatGroq`: Groq의 `openai/gpt-oss-120b` 호출
+- `ChatOpenAI`: OpenAI의 `gpt-5.4-mini` 호출
 - `with_structured_output`: LLM 출력을 strict JSON Schema에 맞게 제한
 - Runnable 파이프라인 `prompt | structured_llm`: 프롬프트와 모델 호출 연결
 
-기본 생성 설정은 temperature 0, 최대 출력 토큰 2,000, 타임아웃 120초, 재시도 2회, reasoning effort `low`다.
+기본 생성 설정은 최대 completion 토큰 8,000, 타임아웃 120초, 재시도 2회, reasoning effort `none`이다. 긴 JSON 응답의 출력 공간을 추론 토큰이 소진하지 않도록 설정하며 temperature는 강제로 지정하지 않는다.
 
-LLM은 최종 Markdown 문자열을 한 번에 직접 생성하지 않는다. 먼저 명시적인 독립 적절성 판단과 다섯 주제의 문단을 가진 `NarrativeDraft` JSON을 생성한다. 첫 판단 절은 한 문단이고, 나머지 네 절은 분석·실행 문단으로 구성된다.
+LLM은 최종 Markdown 문자열을 한 번에 직접 생성하지 않는다. 먼저 독립 적절성 판단과 네 개의 개인화 문단, 문단별 내부 `evidence_id`를 가진 `NarrativeDraft` JSON을 생성한다.
 
-1. 현재 상황 요약과 독립 적절성 판단
-2. 집 찾기와 임대차계약 진행 방법
-3. 이사 준비와 입주 후 정착 방법
-4. 자취 시작 전후 주의점
-5. 도움이 되는 정부·지자체 정책
+1. 지금 독립해도 되는지
+2. 나에게 맞는 집 찾기·계약·이사 순서
+3. 내 상황에서 조심할 점
+4. 우선 확인할 지원정책
 
-프로그램은 이 문단들을 순서대로 조립해 하나의 Markdown 본문을 만든다. 첫 문단에는 세 등급 중 선택된 독립 판단을 명시하고, 마지막 문단에는 이번 생성에 사용된 검색 근거의 출처 목록을 덧붙인다.
+프로그램은 네 문단을 순서대로 조립해 하나의 Markdown 본문을 만든다. 문단별 `evidence_id`가 실제 검색 결과이며 가이드·사례·정책 근거를 사용했는지 검증하지만, 파일명·페이지·출처 표시는 사용자 본문에서 제거하고 별도 evidence JSON에만 보존한다.
 
 ## 12. 최종 출력
 
@@ -334,7 +331,7 @@ LLM은 최종 Markdown 문자열을 한 번에 직접 생성하지 않는다. �
 ```json
 {
   "report_title": "사용자 상황에 맞춘 보고서 제목",
-  "report_body_markdown": "## 1. 현재 상황 요약과 독립 적절성 판단\n\n현재 판단은 **조건 확인 후 독립이 적절함**이다...\n\n실행 문단...\n\n## 2. ..."
+  "report_body_markdown": "## 1. 지금 독립해도 되는지\n\n현재 판단은 **조건 확인 후 독립이 적절함**입니다...\n\n## 2. 나에게 맞는 집 찾기·계약·이사 순서\n\n..."
 }
 ```
 
@@ -343,7 +340,7 @@ LLM은 최종 Markdown 문자열을 한 번에 직접 생성하지 않는다. �
 | 출력 필드 | 의미 |
 |---|---|
 | `report_title` | LLM이 작성한 보고서 제목 |
-| `report_body_markdown` | 다섯 개 이상의 소제목과 상세 문단으로 구성된 전체 보고서 본문 |
+| `report_body_markdown` | 정확히 네 개의 소제목과 개인화 문단으로 구성된 전체 보고서 본문 |
 
 본문은 JSON 문자열이지만 내용 자체는 Markdown이다. 현재 출력에는 별도의 예산 배열, 정책 배열이나 차트 데이터가 없다. 표나 불릿 목록이 아닌 상세 서술형 보고서를 의도한 구조다.
 
@@ -351,13 +348,15 @@ LLM은 최종 Markdown 문자열을 한 번에 직접 생성하지 않는다. �
 
 LLM 응답을 그대로 저장하지 않고 다음 조건을 코드로 검증한다.
 
-- 보고서에 `##` 소제목이 5개 이상 존재해야 한다.
-- 전체 본문은 2,400자 이상이어야 한다.
-- 첫 소제목은 한 문단, 나머지 소제목은 두 개 이상의 문단이어야 한다.
+- 보고서에 `##` 소제목이 정확히 4개 존재해야 한다.
+- 전체 본문의 강제 허용 범위는 800~3,700자다. 프롬프트는 이보다 자세한 작성을 유도하지만, 핵심 내용이 있으면 단순 분량 부족만으로 결과를 폐기하지 않는다. 각 절은 확인 대상·비교 기준·결과에 따른 다음 행동을 포함해야 한다.
+- 각 소제목에는 반복을 막기 위해 서술 문단 하나만 있어야 한다.
 - 불릿 목록과 번호 목록을 포함할 수 없다.
 - 부동산·계약, 이사, 주의·안전, 지원·정책 주제가 포함되어야 한다.
-- 본문에 `[출처: 파일명, p.페이지]` 형식의 출처가 있어야 한다.
-- 본문에서 인용한 모든 파일명과 페이지가 실제 `retrieved_context`에 있어야 한다.
+- 사용자 본문에는 파일명·페이지·`[출처: ...]`·내부 evidence ID가 없어야 한다.
+- 내부 초안이 사용했다고 밝힌 evidence ID는 실제 검색 결과여야 하며 가이드·사례·정책 코퍼스를 모두 활용해야 한다.
+- 목표 지역, 주거 형태, 우선순위와 총 5개 이상의 사용자 상황값이 실제 판단과 실행 계획에 반영되어야 한다.
+- 입력 및 계산 금액은 관련성이 있을 때만 개인 판단의 보조 근거로 사용하며, 개인화를 증명하기 위한 필수 출력으로 강제하지 않는다.
 
 LLM이 검색되지 않은 문서나 페이지를 출처로 만들면 최종 저장 전에 오류가 발생한다. 또한 프롬프트는 검색 근거에 없는 정책 자격, 금액, 날짜, 지역, 기관과 행정 절차를 임의로 생성하지 않도록 지시한다.
 
@@ -386,7 +385,7 @@ examples/inputs/real_rag_input.json
   → 사용자 상황 검증
   → PGVector와 Elasticsearch 검색 및 Weighted RRF
   → storage/generated_reports/hybrid_rag_evidence.json
-  → Groq 보고서 생성
+  → OpenAI 보고서 생성
   → storage/generated_reports/hybrid_rag_report.json
 ```
 
@@ -456,17 +455,17 @@ API 호출 없이 입력 스키마만 확인하려면 다음 명령을 사용한
 
 | 환경변수 | 기본값 또는 역할 |
 |---|---|
-| `EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` |
-| `EMBEDDING_DEVICE` | `cpu` |
-| `EMBEDDING_BATCH_SIZE` | `8` |
-| `EMBEDDING_LOCAL_FILES_ONLY` | `true` |
-| `GUIDES_COLLECTION` | `youth_independence_guides` |
-| `CASES_COLLECTION` | `youth_independence_cases` |
-| `POLICIES_COLLECTION` | `youth_independence_policies` |
+| `OPENAI_API_KEY` | 임베딩과 보고서 생성에 사용하는 실제 OpenAI API 키 |
+| `EMBEDDING_MODEL` | `text-embedding-3-small`로 고정 |
+| `EMBEDDING_DIMENSIONS` | `1536` |
+| `EMBEDDING_BATCH_SIZE` | `64` |
+| `GUIDES_COLLECTION` | `youth_independence_guides_openai_3_small` |
+| `CASES_COLLECTION` | `youth_independence_cases_openai_3_small` |
+| `POLICIES_COLLECTION` | `youth_independence_policies_openai_3_small` |
 | `PGVECTOR_URL` | PostgreSQL·PGVector 연결 문자열 |
-| `GROQ_API_KEY` | 실제 Groq API 키 |
-| `GROQ_MODEL` | `openai/gpt-oss-120b`로 고정 |
-| `GROQ_MAX_TOKENS` | 기본 2,000 |
+| `OPENAI_GENERATION_MODEL` | `gpt-5.4-mini`로 고정 |
+| `OPENAI_MAX_OUTPUT_TOKENS` | 기본 8,000. 추론 토큰과 구조화 JSON 보고서가 공유하는 completion 한도 |
+| `OPENAI_REASONING_EFFORT` | 기본 `none`. 긴 보고서 본문이 추론 토큰에 밀려 잘리는 현상 방지 |
 
 실제 API 키는 `.env`에만 저장하며 Git에 포함하지 않는다.
 
@@ -474,14 +473,14 @@ API 호출 없이 입력 스키마만 확인하려면 다음 명령을 사용한
 
 | 단계 | 대표 실패 조건 |
 |---|---|
-| 설정 | PDF 폴더 없음, 잘못된 청킹 크기, Groq 키 없음 |
+| 설정 | PDF 폴더 없음, 잘못된 청킹 크기, OpenAI 키 없음 |
 | PDF 처리 | 적재할 PDF 없음, 추출 가능한 텍스트 없음 |
-| 임베딩 | 로컬 모델 캐시 없음 또는 불완전한 스냅샷 |
+| 임베딩 | OpenAI API 오류, 사용량 한도 또는 인증 실패 |
 | DB | Docker 미실행, 연결 실패, 컬렉션이 비어 있음 |
 | 적재 검증 | 생성 청크 수와 저장 행 수 불일치 |
 | 사용자 입력 | 필수 필드 누락, 음수 금액, 허용되지 않은 추가 필드 |
 | 검색 | 검색 문서에 파일명·페이지 메타데이터 없음, 근거 없음 |
-| 생성 | Groq API 오류, strict JSON Schema 불일치 |
+| 생성 | OpenAI API 오류, strict JSON Schema 불일치 |
 | 최종 검증 | 분량·문단·주제 부족, 목록 사용, 실제 근거에 없는 출처 인용 |
 
 ## 19. 현재 구현의 중요한 한계
@@ -498,4 +497,4 @@ API 호출 없이 입력 스키마만 확인하려면 다음 명령을 사용한
 
 ## 20. 한 문장으로 정리한 현재 동작
 
-현재 시스템은 사용자의 독립 목적, 지역, 소득, 보유자금, 주거비 조건, 일정, 주거 선호, 우선순위와 자유 입력을 받아 PGVector와 Elasticsearch를 함께 검색하고, Weighted RRF로 선별한 실제 파일명·페이지·본문만을 LangChain을 통해 Groq LLM에 전달하여 독립 적절성, 집 찾기와 계약, 이사와 정착, 주의점, 정부·지자체 정책이 포함된 2,400자 이상의 다섯 부분 존댓말 서술형 보고서를 JSON으로 저장한다. 예산은 독립 가능성을 보조하는 근거로만 사용한다.
+현재 시스템은 사용자의 독립 목적, 지역, 소득, 보유자금, 주거비 조건, 일정, 주거 선호, 우선순위와 자유 입력을 받아 PGVector와 Elasticsearch를 함께 검색하고, Weighted RRF로 선별한 실제 근거를 LangChain과 OpenAI `gpt-5.4-mini`에 전달하여 네 부분 개인 맞춤형 존댓말 보고서를 JSON으로 저장한다. 본문은 800~3,700자를 허용하되 프롬프트로 충분한 구체성을 유도하며, 출처 추적 정보는 evidence JSON에만 남기고 사용자 보고서에서는 노출하지 않는다.

@@ -17,7 +17,7 @@ src/
 ├─ common/       # 임베딩과 PGVector 공통 연결
 ├─ ingestion/    # PDF 로딩, 청킹, 벡터 DB 적재
 ├─ retrieval/    # 검색, 평가, RAG 근거 구성
-├─ generation/   # Groq 보고서 생성과 출력 스키마
+├─ generation/   # OpenAI 보고서 생성과 출력 스키마
 ├─ config.py     # 환경설정
 └─ run_rag.py    # 검색부터 보고서 생성까지의 실행 진입점
 knowledge_base/  # 원본 PDF, 메타데이터, 보관 자료
@@ -39,6 +39,6 @@ Vector-only 기준선은 `evaluation/baselines/vector_only_2026-08-17/`에 보�
 
 ## 구조화 보고서 생성
 
-Groq `openai/gpt-oss-120b` 연결과 종합 보고서 JSON 생성의 1단계 시험 방법은 [생성 단계 검증 가이드](docs/guides/GENERATION_STEP_1.md)를 참고한다. 현재 단계는 검색 결과 자동 연결과 HTML/PDF 렌더링 전의 독립 생성 시험이다.
+OpenAI `gpt-5.4-mini` 연결과 종합 보고서 JSON 생성의 1단계 시험 방법은 [생성 단계 검증 가이드](docs/guides/GENERATION_STEP_1.md)를 참고한다. 현재 단계는 검색 결과 자동 연결과 HTML/PDF 렌더링 전의 독립 생성 시험이다.
 
-실제 Hybrid 검색 결과를 Groq 보고서 생성에 연결하는 전체 RAG 실행 방법은 [실제 RAG 실행 가이드](docs/guides/REAL_RAG_RUN_GUIDE.md)를 참고한다. 이 실행 경로는 `TEST_*` 합성 문서를 사용하지 않는다. 전체 흐름과 입력·출력은 [현재 구현 상세 설명서](docs/IMPLEMENTATION_OVERVIEW.md), 다른 문서 목록은 [문서 인덱스](docs/README.md)에 정리되어 있다.
+실제 Hybrid 검색 결과를 OpenAI 보고서 생성에 연결하는 전체 RAG 실행 방법은 [실제 RAG 실행 가이드](docs/guides/REAL_RAG_RUN_GUIDE.md)를 참고한다. 이 실행 경로는 `TEST_*` 합성 문서를 사용하지 않는다. 전체 흐름과 입력·출력은 [현재 구현 상세 설명서](docs/IMPLEMENTATION_OVERVIEW.md), 다른 문서 목록은 [문서 인덱스](docs/README.md)에 정리되어 있다.

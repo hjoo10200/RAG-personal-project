@@ -1,58 +1,29 @@
-"""Embedding model construction."""
+"""OpenAI embedding model construction."""
 
 from __future__ import annotations
 
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_openai import OpenAIEmbeddings
 
 from src.config import IngestSettings
 
 
-def resolve_embedding_model(settings: IngestSettings) -> str:
-    """Resolve the cached snapshot path when offline-only loading is enabled."""
-    if not settings.embedding_local_files_only:
-        return settings.embedding_model
-
-    repository_dir = settings.model_cache_dir / (
-        "models--" + settings.embedding_model.replace("/", "--")
-    )
-    main_ref = repository_dir / "refs" / "main"
-    if not main_ref.is_file():
-        raise FileNotFoundError(
-            "로컬 임베딩 모델을 찾을 수 없습니다. "
-            "EMBEDDING_LOCAL_FILES_ONLY=false로 한 번 다운로드하세요: "
-            f"{repository_dir}"
+def create_embeddings(settings: IngestSettings) -> OpenAIEmbeddings:
+    """Create one LangChain OpenAI embedding client without making an API call."""
+    if not settings.openai_api_key or settings.openai_api_key.lower().startswith("your_"):
+        raise ValueError(
+            "OPENAI_API_KEY가 설정되지 않았습니다. .env에 OpenAI API 키를 입력하세요."
         )
-    revision = main_ref.read_text(encoding="utf-8").strip()
-    snapshot_dir = repository_dir / "snapshots" / revision
-    if not (snapshot_dir / "model.safetensors").is_file():
-        raise FileNotFoundError(f"임베딩 모델 스냅샷이 불완전합니다: {snapshot_dir}")
-    return str(snapshot_dir)
-
-
-def create_embeddings(settings: IngestSettings) -> HuggingFaceEmbeddings:
-    settings.model_cache_dir.mkdir(parents=True, exist_ok=True)
-    model_name = resolve_embedding_model(settings)
     print(
         f"[embedding] model={settings.embedding_model}, "
-        f"device={settings.embedding_device}, batch={settings.embedding_batch_size}, "
-        f"local_only={settings.embedding_local_files_only}"
+        f"dimensions={settings.embedding_dimensions}, "
+        f"batch={settings.embedding_batch_size}"
     )
-    return HuggingFaceEmbeddings(
-        model_name=model_name,
-        cache_folder=str(settings.model_cache_dir),
-        model_kwargs={
-            "device": settings.embedding_device,
-            "local_files_only": settings.embedding_local_files_only,
-        },
-        encode_kwargs={
-            "normalize_embeddings": True,
-            "batch_size": settings.embedding_batch_size,
-            "prompt": "passage: ",
-        },
-        query_encode_kwargs={
-            "normalize_embeddings": True,
-            "batch_size": settings.embedding_batch_size,
-            "prompt": "query: ",
-        },
-        show_progress=True,
+    return OpenAIEmbeddings(
+        api_key=settings.openai_api_key,
+        model=settings.embedding_model,
+        dimensions=settings.embedding_dimensions,
+        chunk_size=settings.embedding_batch_size,
+        timeout=settings.embedding_timeout_seconds,
+        max_retries=settings.embedding_max_retries,
+        show_progress_bar=True,
     )

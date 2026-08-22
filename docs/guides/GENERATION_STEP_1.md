@@ -1,11 +1,11 @@
-# 증강 생성 1단계: Groq 종합 보고서 출력 확인
+# 증강 생성 1단계: OpenAI 종합 보고서 출력 확인
 
 이번 단계는 PGVector 검색과 최종 시각화를 연결하기 전에 다음 경로만 검증한다.
 
 ```text
 사용자 상황 JSON + 검색 근거 JSON
   -> LangChain ChatPromptTemplate
-  -> LangChain ChatGroq / openai/gpt-oss-120b
+  -> LangChain ChatOpenAI / gpt-5.4-mini
   -> 제목과 하나의 Markdown 본문을 담은 NarrativeReport JSON
 ```
 
@@ -13,10 +13,10 @@
 
 ## 1. API 키 입력
 
-프로젝트 루트의 `.env`에서 다음 항목에 Groq Console에서 발급한 키를 입력한다.
+프로젝트 루트의 `.env`에서 다음 항목에 OpenAI Platform에서 발급한 키를 입력한다.
 
 ```dotenv
-GROQ_API_KEY=gsk_...
+OPENAI_API_KEY=sk-...
 ```
 
 키는 `.gitignore`에 포함된 `.env`에만 저장하고 코드나 `.env.example`에는 입력하지 않는다.
@@ -44,7 +44,7 @@ API 키를 입력한 뒤 모델 설정도 확인한다.
   --output storage\generated_reports\smoke_report.json
 ```
 
-성공하면 `storage/generated_reports/smoke_report.json`에 `report_title`과 `report_body_markdown`을 가진 JSON이 저장된다. 모델은 내부적으로 독립 판단 등급과 다섯 주제의 서술 문단을 생성하고, 프로그램이 이를 하나의 Markdown 본문으로 합친다. 다섯 주제는 상황과 독립 적절성, 집 찾기와 임대차계약, 이사와 입주 정착, 주의점, 정부·지자체 정책이다. 첫 절은 예산 반복을 막기 위해 한 문단이며 나머지는 분석·실행 두 문단이다. 최종 본문은 목록이나 표가 아닌 자세한 존댓말 서술 문단이며 전체 본문은 2,400자 이상이어야 한다. 이 디렉터리는 Git 추적에서 제외된다.
+성공하면 `storage/generated_reports/smoke_report.json`에 `report_title`과 `report_body_markdown`을 가진 JSON이 저장된다. 모델은 독립 판단, 개인별 실행 순서, 위험 대응, 적합 정책의 네 문단과 내부 근거 ID를 생성한다. 프로그램은 내부 근거가 실제 검색 결과인지 확인한 뒤 출처 표시를 제거하고 존댓말 Markdown 본문만 사용자 출력에 저장한다. 본문 강제 허용 범위는 800~3,700자이며, 프롬프트는 이 하한보다 자세하게 쓰도록 유도한다. 각 절은 한 문단으로 유지하되 확인 대상·비교 기준·결과에 따른 다음 행동을 구체적으로 설명한다. 이 디렉터리는 Git 추적에서 제외된다.
 
 ## 현재 포함하지 않은 범위
 
@@ -55,4 +55,4 @@ API 키를 입력한 뒤 모델 설정도 확인한다.
 
 다음 단계에서는 현재 검색 모듈의 결과를 `retrieved_context`에 자동으로 연결한다.
 
-생성에는 `langchain-groq`의 `ChatGroq`를 사용한다. 프롬프트, 모델 호출, strict JSON Schema 구조화 출력까지 LangChain 파이프라인으로 실행한다.
+생성에는 `langchain-openai`의 `ChatOpenAI`와 `gpt-5.4-mini`를 사용한다. 프롬프트, 모델 호출, strict JSON Schema 구조화 출력까지 LangChain 파이프라인으로 실행한다.

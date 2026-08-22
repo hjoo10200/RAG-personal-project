@@ -44,9 +44,9 @@ def get_corpus_config(name: str) -> CorpusConfig:
         raise ValueError(f"지원하지 않는 corpus입니다: {name}")
 
     defaults = {
-        "guides": ("youth_independence_guides", 800, 120),
-        "cases": ("youth_independence_cases", 1000, 150),
-        "policies": ("youth_independence_policies", 900, 150),
+        "guides": ("youth_independence_guides_openai_3_small", 800, 120),
+        "cases": ("youth_independence_cases_openai_3_small", 1000, 150),
+        "policies": ("youth_independence_policies_openai_3_small", 900, 150),
     }
     default_collection, default_size, default_overlap = defaults[name]
     prefix = name.upper()
@@ -85,15 +85,16 @@ class IngestSettings:
 
     corpus: CorpusConfig = field(default_factory=lambda: get_corpus_config("guides"))
     project_root: Path = PROJECT_ROOT
-    model_cache_dir: Path = PROJECT_ROOT / "models"
+    openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     embedding_model: str = os.getenv(
-        "EMBEDDING_MODEL", "intfloat/multilingual-e5-small"
+        "EMBEDDING_MODEL", "text-embedding-3-small"
     )
-    embedding_device: str = os.getenv("EMBEDDING_DEVICE", "cpu")
-    embedding_batch_size: int = int(os.getenv("EMBEDDING_BATCH_SIZE", "8"))
-    embedding_local_files_only: bool = os.getenv(
-        "EMBEDDING_LOCAL_FILES_ONLY", "true"
-    ).lower() in {"1", "true", "yes"}
+    embedding_dimensions: int = int(os.getenv("EMBEDDING_DIMENSIONS", "1536"))
+    embedding_batch_size: int = int(os.getenv("EMBEDDING_BATCH_SIZE", "64"))
+    embedding_timeout_seconds: float = float(
+        os.getenv("EMBEDDING_TIMEOUT_SECONDS", "120")
+    )
+    embedding_max_retries: int = int(os.getenv("EMBEDDING_MAX_RETRIES", "3"))
     database_url: str = os.getenv(
         "PGVECTOR_URL",
         "postgresql+psycopg://admin:admin123@localhost:5432/vectordb",
@@ -121,8 +122,18 @@ class IngestSettings:
 
     def validate(self) -> None:
         self.corpus.validate()
+        if self.embedding_model != "text-embedding-3-small":
+            raise ValueError(
+                "이번 프로젝트의 임베딩 모델은 text-embedding-3-small로 고정합니다."
+            )
+        if self.embedding_dimensions <= 0:
+            raise ValueError("EMBEDDING_DIMENSIONS는 1 이상이어야 합니다.")
         if self.embedding_batch_size <= 0:
             raise ValueError("EMBEDDING_BATCH_SIZE는 1 이상이어야 합니다.")
+        if self.embedding_timeout_seconds <= 0:
+            raise ValueError("EMBEDDING_TIMEOUT_SECONDS는 0보다 커야 합니다.")
+        if self.embedding_max_retries < 0:
+            raise ValueError("EMBEDDING_MAX_RETRIES는 0 이상이어야 합니다.")
 
     @property
     def psycopg_url(self) -> str:
@@ -131,37 +142,34 @@ class IngestSettings:
 
 @dataclass(frozen=True)
 class GenerationSettings:
-    """Groq report-generation settings."""
+    """OpenAI report-generation settings."""
 
-    api_key: str = os.getenv("GROQ_API_KEY", "")
-    model: str = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
-    temperature: float = float(os.getenv("GROQ_TEMPERATURE", "0"))
-    max_tokens: int = int(os.getenv("GROQ_MAX_TOKENS", "2000"))
-    timeout_seconds: float = float(os.getenv("GROQ_TIMEOUT_SECONDS", "120"))
-    max_retries: int = int(os.getenv("GROQ_MAX_RETRIES", "2"))
-    reasoning_effort: str = os.getenv("GROQ_REASONING_EFFORT", "low")
+    api_key: str = os.getenv("OPENAI_API_KEY", "")
+    model: str = os.getenv("OPENAI_GENERATION_MODEL", "gpt-5.4-mini")
+    max_tokens: int = int(os.getenv("OPENAI_MAX_OUTPUT_TOKENS", "8000"))
+    timeout_seconds: float = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "120"))
+    max_retries: int = int(os.getenv("OPENAI_MAX_RETRIES", "2"))
+    reasoning_effort: str = os.getenv("OPENAI_REASONING_EFFORT", "none")
 
     def validate(self) -> None:
         if not self.api_key or self.api_key.lower().startswith("your_"):
             raise ValueError(
-                "GROQ_API_KEY가 설정되지 않았습니다. .env에 Groq API 키를 입력하세요."
+                "OPENAI_API_KEY가 설정되지 않았습니다. .env에 OpenAI API 키를 입력하세요."
             )
-        if self.model != "openai/gpt-oss-120b":
+        if self.model != "gpt-5.4-mini":
             raise ValueError(
                 "이번 프로젝트의 보고서 생성 모델은 "
-                "openai/gpt-oss-120b로 고정합니다."
+                "gpt-5.4-mini로 고정합니다."
             )
-        if not 0 <= self.temperature <= 2:
-            raise ValueError("GROQ_TEMPERATURE는 0 이상 2 이하여야 합니다.")
         if self.max_tokens <= 0:
-            raise ValueError("GROQ_MAX_TOKENS는 1 이상이어야 합니다.")
+            raise ValueError("OPENAI_MAX_OUTPUT_TOKENS는 1 이상이어야 합니다.")
         if self.timeout_seconds <= 0:
-            raise ValueError("GROQ_TIMEOUT_SECONDS는 0보다 커야 합니다.")
+            raise ValueError("OPENAI_TIMEOUT_SECONDS는 0보다 커야 합니다.")
         if self.max_retries < 0:
-            raise ValueError("GROQ_MAX_RETRIES는 0 이상이어야 합니다.")
-        if self.reasoning_effort not in {"low", "medium", "high"}:
+            raise ValueError("OPENAI_MAX_RETRIES는 0 이상이어야 합니다.")
+        if self.reasoning_effort not in {"none", "low", "medium", "high", "xhigh"}:
             raise ValueError(
-                "GROQ_REASONING_EFFORT는 low, medium, high 중 하나여야 합니다."
+                "OPENAI_REASONING_EFFORT는 none, low, medium, high, xhigh 중 하나여야 합니다."
             )
 
 

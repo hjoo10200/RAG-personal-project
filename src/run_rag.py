@@ -1,4 +1,4 @@
-"""Run the real hybrid retrieval-to-Groq generation pipeline."""
+"""Run the real hybrid retrieval-to-OpenAI generation pipeline."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
-from groq import GroqError
+from openai import OpenAIError
 from pydantic import ValidationError
 
 from src.generation.report_generator import generate_narrative_report
@@ -70,7 +70,7 @@ def main() -> None:
 
     try:
         report = generate_narrative_report(generation_request)
-    except (GroqError, ValidationError, ValueError) as error:
+    except (OpenAIError, ValidationError, ValueError) as error:
         raise SystemExit(f"실제 RAG 보고서 생성 실패: {error}") from error
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

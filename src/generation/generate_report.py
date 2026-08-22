@@ -6,7 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
-from groq import GroqError
+from openai import OpenAIError
 from pydantic import ValidationError
 
 from src.config import GenerationSettings
@@ -16,7 +16,7 @@ from src.generation.report_schema import GenerationRequest, NarrativeDraft, Narr
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Groq 종합 자취 보고서 생성 단계를 독립적으로 시험합니다."
+        description="OpenAI 종합 자취 보고서 생성 단계를 독립적으로 시험합니다."
     )
     parser.add_argument("--input", type=Path, help="GenerationRequest JSON 파일")
     parser.add_argument("--output", type=Path, help="생성 보고서 JSON 저장 경로")
@@ -71,8 +71,8 @@ def main() -> None:
         try:
             create_report_model(settings)
         except ValueError as error:
-            raise SystemExit(f"Groq 설정 검증 실패: {error}") from error
-        print(f"[ok] Groq 설정 및 모델 초기화: {settings.model}")
+            raise SystemExit(f"OpenAI 설정 검증 실패: {error}") from error
+        print(f"[ok] OpenAI 설정 및 모델 초기화: {settings.model}")
         return
 
     if args.input is None:
@@ -97,8 +97,8 @@ def main() -> None:
 
     try:
         report = generate_narrative_report(request)
-    except (GroqError, ValidationError, ValueError) as error:
-        raise SystemExit(f"Groq 설정 또는 보고서 검증 실패: {error}") from error
+    except (OpenAIError, ValidationError, ValueError) as error:
+        raise SystemExit(f"OpenAI 설정 또는 보고서 검증 실패: {error}") from error
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
         report.model_dump_json(indent=2),
