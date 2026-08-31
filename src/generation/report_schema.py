@@ -5,7 +5,9 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from src.finance.schema import FinancialResult, MoneyRange
 
 
 class StrictModel(BaseModel):
@@ -24,8 +26,21 @@ class UserSituation(StrictModel):
     )
     current_region: str = Field(description="현재 거주 지역")
     target_region: str = Field(description="희망 독립 지역")
-    monthly_income_krw: int = Field(ge=0, description="월 소득(원)")
-    available_cash_krw: int = Field(ge=0, description="현재 사용 가능한 자금(원)")
+    monthly_income_krw: int | None = Field(default=None, ge=0, description="기존 입력의 정확한 월 소득. 모름은 null")
+    available_cash_krw: int | None = Field(default=None, ge=0, description="기존 입력의 정확한 가용 자금. 모름은 null")
+    cash_range: MoneyRange | None = None
+    income_range: MoneyRange | None = None
+    fixed_cost_range: MoneyRange | None = None
+    income_status: Literal["current", "none", "planned", "unknown"] = "current"
+    household_size: int = Field(default=1, ge=1, le=20)
+    property_type: Literal["housing", "officetel", "other", "unknown"] = "unknown"
+    existing_fixed_cost_krw: int | None = Field(default=None, ge=0)
+    nonhousing_living_cost_krw: int | None = Field(default=None, ge=0)
+    utilities_cost_krw: int | None = Field(default=None, ge=0)
+    brokerage_cost_krw: int | None = Field(default=None, ge=0)
+    setup_cost_krw: int | None = Field(default=None, ge=0)
+    reserve_cash_krw: int | None = Field(default=None, ge=0)
+    monthly_savings_krw: int | None = Field(default=None, ge=0)
     move_timeline: str = Field(description="희망 독립 시기")
     housing_preference: str = Field(description="선호 주거 형태")
     priorities: list[str] = Field(description="독립 시 우선순위")
@@ -76,6 +91,35 @@ class UserSituation(StrictModel):
         description="예상 일회성 이사비, 모르는 경우 null",
     )
 
+    @model_validator(mode="after")
+    def validate_money_inputs(self):
+        if self.existing_fixed_cost_krw is not None and any(value is not None for value in (
+            self.fixed_cost_range, self.other_monthly_fixed_cost_krw, self.monthly_debt_payment_krw
+        )):
+            raise ValueError("기존 필수지출 합계와 세부 금액을 중복 입력하지 마세요.")
+        if self.nonhousing_living_cost_krw is not None and any(value is not None for value in (
+            self.estimated_food_cost_krw, self.estimated_transport_cost_krw,
+            self.estimated_utilities_and_communications_krw
+        )):
+            raise ValueError("생활비 합계와 기존 세부 생활비를 중복 입력하지 마세요.")
+        for name, exact in (("cash_range", self.available_cash_krw), ("income_range", self.monthly_income_krw), ("fixed_cost_range", None)):
+            interval = getattr(self, name)
+            if interval and (interval.lower is None or interval.lower < 0):
+                raise ValueError(f"{name}의 하한은 0 이상이어야 합니다.")
+            if interval and exact is not None:
+                raise ValueError(f"{name}와 정확한 금액을 동시에 지정하지 마세요.")
+        if self.income_status in {"unknown", "none"} and self.income_range is not None:
+            raise ValueError("수입 상태와 구간이 모순됩니다.")
+        if self.income_status == "none" and self.monthly_income_krw not in (None, 0):
+            raise ValueError("수입 없음 상태에 양수 소득을 지정할 수 없습니다.")
+        if self.income_status == "unknown" and self.monthly_income_krw is not None:
+            raise ValueError("수입 미확인 상태에는 정확한 소득을 지정할 수 없습니다.")
+        if self.fixed_cost_range is not None and any(value is not None for value in (
+            self.other_monthly_fixed_cost_krw, self.monthly_debt_payment_krw
+        )):
+            raise ValueError("기존 필수 지출 구간과 세부 정확한 금액을 동시에 지정하지 마세요.")
+        return self
+
 
 class RetrievedEvidence(StrictModel):
     corpus: Literal["guides", "cases", "policies"]
@@ -100,6 +144,7 @@ class RetrievedEvidence(StrictModel):
 class GenerationRequest(StrictModel):
     situation: UserSituation
     retrieved_context: list[RetrievedEvidence] = Field(min_length=1)
+    financial_result: FinancialResult | None = None
 
 
 class RagRequest(StrictModel):
@@ -135,12 +180,6 @@ class NarrativeDraft(StrictModel):
     risk_evidence_ids: list[str] = Field(
         description="위험 문단에 실제 사용한 evidence_id 목록"
     )
-    policy_paragraph: str = Field(
-        description="적합도가 높은 지원정책 2~3개와 확인할 자격을 설명하는 문단",
-    )
-    policy_evidence_ids: list[str] = Field(
-        description="정책 문단에 실제 사용한 policies evidence_id 목록",
-    )
 
 
 class NarrativeReport(StrictModel):
@@ -155,13 +194,13 @@ class NarrativeReport(StrictModel):
     @classmethod
     def validate_report_sections(cls, body: str) -> str:
         headings = [line for line in body.splitlines() if line.startswith("## ")]
-        if len(headings) != 4:
-            raise ValueError("보고서에는 정확히 4개의 ## 소제목이 필요합니다.")
-        if not 800 <= len(body) <= 3700:
-            raise ValueError("보고서 본문은 800자 이상 3,700자 이하여야 합니다.")
+        if len(headings) != 3:
+            raise ValueError("보고서에는 정확히 3개의 ## 소제목이 필요합니다.")
+        if not 500 <= len(body) <= 3200:
+            raise ValueError("보고서 본문은 500자 이상 3,200자 이하여야 합니다.")
 
         sections = re.split(r"(?m)^## .+\n", body)[1:]
-        if len(sections) != 4:
+        if len(sections) != 3:
             raise ValueError("소제목별 보고서 본문을 확인할 수 없습니다.")
         for index, section in enumerate(sections, start=1):
             paragraphs = [part.strip() for part in section.split("\n\n") if part.strip()]
@@ -176,7 +215,6 @@ class NarrativeReport(StrictModel):
             "계약": ("계약",),
             "이사": ("이사",),
             "위험·주의": ("위험", "주의", "안전"),
-            "지원정책": ("지원", "정책"),
         }
         missing = [
             name

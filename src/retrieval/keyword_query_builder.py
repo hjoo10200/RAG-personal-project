@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from src.generation.report_schema import UserSituation
+from src.finance.schema import FinancialResult
 
 
 def _age_band(age: int) -> str:
@@ -33,6 +34,9 @@ def _contains_any(value: str, terms: tuple[str, ...]) -> bool:
 
 def build_structured_keyword_queries(
     situation: UserSituation,
+    *,
+    corpora: tuple[str, ...] = ("guides", "cases", "policies"),
+    financial_result: FinancialResult | None = None,
 ) -> dict[str, tuple[str, ...]]:
     """Use only fields that help each corpus rather than one concatenated sentence."""
     target_region = _region_terms(situation.target_region)
@@ -64,7 +68,8 @@ def build_structured_keyword_queries(
         )
 
     policy_queries: list[str] = []
-    policy_base = f"2026 {target_region} {age_terms} {homeowner}"
+    # Do not assume that the newest notice has the current year in its title.
+    policy_base = f"{target_region} {age_terms} {homeowner}"
     if _contains_any(housing, ("월세", "원룸", "오피스텔")):
         policy_queries.extend(
             [
@@ -86,14 +91,14 @@ def build_structured_keyword_queries(
         ("미취업", "구직", "취업 준비", "취업준비", "실업"),
     ):
         policy_queries.append(
-            f"{policy_base} 서울 청년수당 미취업 구직 생활비 지원"
+            f"{policy_base} 미취업 구직 취업준비 생활비 지원"
         )
-    if _contains_any(
+    elif _contains_any(
         situation.employment_status,
         ("재직", "근로", "취업", "직장"),
     ):
         policy_queries.append(
-            f"{policy_base} 서울 희망두배 청년통장 근로 청년 저축 자산형성"
+            f"{policy_base} 근로 청년 저축 자산형성 지원"
         )
     is_current_student = _contains_any(
         situation.education_status,
@@ -114,8 +119,13 @@ def build_structured_keyword_queries(
             f"{policy_base} 청년 주거 지원 {housing} 신청자격"
         )
 
-    return {
+    if financial_result:
+        for hint in financial_result.query_hints:
+            guide_queries.append(f"{housing} {priorities} {hint}")
+            case_queries.append(f"{target_region} {situation.purpose} 청년 실제 사례 {hint}")
+    queries = {
         "guides": tuple(dict.fromkeys(guide_queries)),
         "cases": tuple(dict.fromkeys(case_queries)),
         "policies": tuple(dict.fromkeys(policy_queries)),
     }
+    return {name: values for name, values in queries.items() if name in corpora}

@@ -1,0 +1,20 @@
+{
+  "reference_id": "seoul_housing_lease_fee_20260831",
+  "reviewed_on": "2026-08-31",
+  "review_due": "2027-08-31",
+  "region": "서울특별시",
+  "property_type": "housing",
+  "source": {"title": "서울부동산정보광장 부동산 중개보수", "url": "https://land.seoul.go.kr/land/broker/brokerageCommission.do"},
+  "monthly_multiplier": 100,
+  "small_transaction_threshold": 50000000,
+  "small_monthly_multiplier": 70,
+  "lease_tiers": [
+    {"under_krw": 50000000, "rate_per_thousand": 5, "cap_krw": 200000},
+    {"under_krw": 100000000, "rate_per_thousand": 4, "cap_krw": 300000},
+    {"under_krw": 600000000, "rate_per_thousand": 3, "cap_krw": null},
+    {"under_krw": 1200000000, "rate_per_thousand": 4, "cap_krw": null},
+    {"under_krw": 1500000000, "rate_per_thousand": 5, "cap_krw": null},
+    {"under_krw": null, "rate_per_thousand": 6, "cap_krw": null}
+  ],
+  "note": "일반 주택 임대차의 협의 전 중개보수 상한, 부가세 별도. 오피스텔 및 다른 지역에 자동 적용하지 않음. 실제 초기 비용에는 세금 포함 협의 금액을 사용. 재확인 기한은 프로젝트 운영 기준."
+}

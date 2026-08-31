@@ -22,6 +22,7 @@ from src.config import CORPUS_NAMES, ElasticsearchSettings, IngestSettings
 from src.generation.report_schema import GenerationRequest, RetrievedEvidence, UserSituation
 from src.retrieval.keyword_query_builder import build_structured_keyword_queries
 from src.retrieval.rag_pipeline import build_search_queries
+from src.finance.schema import FinancialResult
 
 
 RRF_CONSTANT = 60
@@ -219,35 +220,47 @@ def _select_diverse_candidates(
     return selected
 
 
-def retrieve_hybrid_evidence(situation: UserSituation) -> GenerationRequest:
-    """Search all corpora with both engines and return grounded report evidence."""
+def retrieve_evidence(
+    situation: UserSituation,
+    *,
+    corpora: tuple[str, ...],
+    financial_result: FinancialResult | None = None,
+    allow_empty: bool = False,
+) -> list[RetrievedEvidence]:
+    """Search only requested corpora; report/policy storage checks are independent."""
+    if not corpora or len(set(corpora)) != len(corpora) or set(corpora) - set(CORPUS_NAMES):
+        raise ValueError("검색 코퍼스 선택을 확인하세요.")
     settings_by_corpus = {
-        name: IngestSettings.for_corpus(name) for name in CORPUS_NAMES
+        name: IngestSettings.for_corpus(name) for name in corpora
     }
     for settings in settings_by_corpus.values():
         settings.validate()
         if count_collection_rows(settings) <= 0:
+            if allow_empty:
+                return []
             raise RuntimeError(
                 f"PGVector 컬렉션이 비어 있습니다: {settings.collection_name}"
             )
 
-    first_settings = settings_by_corpus[CORPUS_NAMES[0]]
+    first_settings = settings_by_corpus[corpora[0]]
     check_database(first_settings)
     embeddings = create_embeddings(first_settings)
 
     elasticsearch_settings = ElasticsearchSettings()
     elasticsearch_settings.validate()
     elasticsearch_client = create_elasticsearch_client(elasticsearch_settings)
-    for corpus in CORPUS_NAMES:
+    for corpus in corpora:
         index_name = elasticsearch_settings.index_name(corpus)
         if count_index_documents(elasticsearch_client, index_name) <= 0:
+            if allow_empty:
+                return []
             raise RuntimeError(f"Elasticsearch 인덱스가 비어 있습니다: {index_name}")
 
-    vector_queries = build_search_queries(situation)
-    keyword_queries = build_structured_keyword_queries(situation)
+    vector_queries = build_search_queries(situation, corpora=corpora, financial_result=financial_result)
+    keyword_queries = build_structured_keyword_queries(situation, corpora=corpora, financial_result=financial_result)
     selected: list[HybridCandidate] = []
 
-    for corpus in CORPUS_NAMES:
+    for corpus in corpora:
         store = open_collection(settings_by_corpus[corpus], embeddings)
         vector_candidates = _retrieve_vector_channel(
             corpus,
@@ -296,6 +309,18 @@ def retrieve_hybrid_evidence(situation: UserSituation) -> GenerationRequest:
             )
         )
 
-    if not evidence:
+    if not evidence and not allow_empty:
         raise RuntimeError("Hybrid 검색에서 보고서 생성에 사용할 근거를 찾지 못했습니다.")
-    return GenerationRequest(situation=situation, retrieved_context=evidence)
+    return evidence
+
+
+def retrieve_hybrid_evidence(
+    situation: UserSituation,
+    financial_result: FinancialResult | None = None,
+) -> GenerationRequest:
+    """Production report path: calculation precedes guides/cases retrieval."""
+    from src.finance.calculator import prepare_finances
+
+    finance = financial_result if financial_result is not None else prepare_finances(situation)
+    evidence = retrieve_evidence(situation, corpora=("guides", "cases"), financial_result=finance)
+    return GenerationRequest(situation=situation, retrieved_context=evidence, financial_result=finance)

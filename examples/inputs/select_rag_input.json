@@ -1,0 +1,20 @@
+{
+  "schema_version": "2",
+  "selections": {
+    "purpose": "work",
+    "age": 27,
+    "employment": "employed",
+    "education": "graduated",
+    "current_region": "gyeonggi",
+    "target_region": "seoul",
+    "timeline": "quarter",
+    "housing": "monthly",
+    "income_status": "current",
+    "cash_band": "1000_1500",
+    "income_band": "200_250",
+    "fixed_band": "unknown",
+    "homeowner": "no",
+    "experience": "first",
+    "priorities": ["commute", "safety"]
+  }
+}

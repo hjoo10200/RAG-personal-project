@@ -22,7 +22,7 @@ SYSTEM_PROMPT = """
 - 핵심 질문은 얼마가 드는지가 아니라 지금 독립이 적절한지와 실제로 어떤 순서로 행동할지입니다.
 - 서로 다른 필드에 같은 조언이나 입력값을 반복하지 않습니다.
 
-네 문단
+세 문단: 정책 검색은 별도 서비스이며 이 보고서에는 정책을 추천하지 않습니다.
 1. assessment_paragraph는 대략 200~500자로 씁니다. 현재 지역과 목표 지역, 독립 목적, 이동 시기,
 주거 형태, 우선순위를 연결해 판단하고, 현재 진행에 유리한 조건과 계약 전에 확인해야 판단이
 바뀌는 조건을 구분합니다. 예산은 판단에 필요한 경우에만 한두 문장으로 설명합니다.
@@ -34,9 +34,6 @@ SYSTEM_PROMPT = """
 3. risk_paragraph는 대략 250~650자로 씁니다. 이 사용자의 입력과 검색 근거에서 가능성이 큰 위험
 세 가지 안팎만 선별하고, 위험이 현실화되는 신호와 그때 조정할 계약 조건·이동 일정·지출·
 주거 선택을 연결합니다. 앞 문단의 체크 항목을 그대로 반복하지 않습니다.
-4. policy_paragraph는 대략 300~700자로 씁니다. 현재 입력과 가장 잘 맞는 정책 2~3개만 골라 정책별로
-맞는 사용자 조건, 아직 확인되지 않은 자격, 독립 과정 중 확인할 시점, 자격이 맞지 않을 때의
-대안을 설명합니다. 정책명을 나열한 뒤 모두 최신 공고를 확인하라는 문장으로 끝내지 않습니다.
 
 개인화 기준
 - target_region, housing_preference, move_timeline과 priorities 중 하나 이상을 실제 판단과 행동에 사용합니다.
@@ -48,7 +45,14 @@ SYSTEM_PROMPT = """
 
 근거와 출력
 - 각 문단의 evidence_ids에는 실제로 사용한 evidence_id만 넣습니다.
-- 정책 문단은 P로 시작하는 근거만 사용하고 최대 3개 정책만 다룹니다.
+- G와 C 근거만 사용하고 정책명·신청 자격·수혜 여부를 새로 설명하지 않습니다.
+- 계산 결과의 scope가 partial 또는 unavailable이면 재정적으로 독립 가능하다고 확정하지 않습니다.
+- 금액 구간은 실제 금액 한 점으로 바꾸지 않습니다. 계산값·사례값·가정을 구분합니다.
+- 미입력 비용은 0원이 아니며, 현재 매물이나 비용 기준을 검색 사례에서 임의로 만들어내지 않습니다.
+- housing_utilities_capacity_krw는 참고 생활비 차감 후 월세·관리비·수도전기가스 전체의 탐색 잔여액입니다. 월세 단독 권장값이나 실제 매물 가격이라고 부르지 않습니다.
+- 전국 전 연령 1인가구 통계는 과거 기준의 참고 시나리오입니다. 청년·목표 지역의 실제 생활비라고 단정하지 않고 실제 견적 또는 사용자 입력과 구분합니다.
+- brokerage_ceiling_excluding_vat_krw는 부가세 별도 상한으로, 협의한 세금 포함 중개보수나 확정 초기 비용으로 바꾸지 않습니다.
+- 지역·주거 형태·시기가 미정이면 선택을 좁히는 행동을 설명하고 임의로 확정하지 않습니다.
 - 보고서 문단에는 evidence_id, 파일명, 페이지, '[출처: ...]'를 절대 쓰지 않습니다.
 - 근거에 없는 정책 자격·금액·날짜·기한·절차와 일반적인 적정 비율을 만들지 않습니다.
 - 입력이나 근거에 없는 사실은 단정하지 말고 확인이 필요한 조건으로 표현합니다.
@@ -60,7 +64,6 @@ SECTION_LAYOUT = (
     ("지금 독립해도 되는지", "assessment_paragraph"),
     ("나에게 맞는 집 찾기·계약·이사 순서", "execution_plan_paragraph"),
     ("내 상황에서 조심할 점", "risk_paragraph"),
-    ("우선 확인할 지원정책", "policy_paragraph"),
 )
 
 
@@ -85,57 +88,11 @@ def create_report_model(settings: GenerationSettings) -> ChatOpenAI:
 
 
 def _build_financial_context(request: GenerationRequest) -> dict[str, object]:
-    """Calculate transparent input-only amounts without decision thresholds."""
-    situation = request.situation
-    fixed_components = {
-        "target_monthly_rent_krw": situation.target_monthly_rent_krw,
-        "expected_management_fee_krw": situation.expected_management_fee_krw,
-        "other_monthly_fixed_cost_krw": situation.other_monthly_fixed_cost_krw,
-        "monthly_debt_payment_krw": situation.monthly_debt_payment_krw,
-    }
-    living_components = {
-        "estimated_food_cost_krw": situation.estimated_food_cost_krw,
-        "estimated_transport_cost_krw": situation.estimated_transport_cost_krw,
-        "estimated_utilities_and_communications_krw": (
-            situation.estimated_utilities_and_communications_krw
-        ),
-    }
-    known_fixed = {
-        name: value for name, value in fixed_components.items() if value is not None
-    }
-    known_living = {
-        name: value for name, value in living_components.items() if value is not None
-    }
-    result: dict[str, object] = {
-        "known_monthly_fixed_components": known_fixed,
-        "known_monthly_living_components": known_living,
-        "notice": "입력된 항목만 계산했으며 미입력 초기비용과 생활비는 포함하지 않았습니다.",
-    }
-    if known_fixed:
-        fixed_total = sum(known_fixed.values())
-        result["known_monthly_fixed_cost_total_krw"] = fixed_total
-        result["income_after_known_monthly_fixed_cost_krw"] = (
-            situation.monthly_income_krw - fixed_total
-        )
-    if known_fixed or known_living:
-        expense_total = sum(known_fixed.values()) + sum(known_living.values())
-        result["known_monthly_expense_total_krw"] = expense_total
-        result["income_after_known_monthly_expenses_krw"] = (
-            situation.monthly_income_krw - expense_total
-        )
-    if situation.target_deposit_krw is not None:
-        result["cash_after_target_deposit_krw"] = (
-            situation.available_cash_krw - situation.target_deposit_krw
-        )
-        if situation.estimated_moving_cost_krw is not None:
-            result["cash_after_target_deposit_and_moving_cost_krw"] = (
-                situation.available_cash_krw
-                - situation.target_deposit_krw
-                - situation.estimated_moving_cost_krw
-            )
-    if situation.estimated_moving_cost_krw is not None:
-        result["estimated_moving_cost_krw"] = situation.estimated_moving_cost_krw
-    return result
+    """Use the pre-retrieval result; legacy evidence can be generated explicitly."""
+    from src.finance.calculator import prepare_finances
+
+    finance = request.financial_result or prepare_finances(request.situation)
+    return finance.model_dump(mode="json")
 
 
 def _build_evidence_payload(
@@ -179,7 +136,6 @@ def _validate_evidence_usage(
         "assessment": draft.assessment_evidence_ids,
         "execution": draft.execution_evidence_ids,
         "risk": draft.risk_evidence_ids,
-        "policy": draft.policy_evidence_ids,
     }
     supplied_ids = set(corpus_by_id)
     used_ids = {item for values in usage.values() for item in values}
@@ -193,15 +149,8 @@ def _validate_evidence_usage(
         raise ValueError("실행 보고서에 guides 근거가 사용되지 않았습니다.")
     if "cases" in available_corpora and "cases" not in used_corpora:
         raise ValueError("개인화 보고서에 실제 청년 cases 근거가 사용되지 않았습니다.")
-    if "policies" in available_corpora and "policies" not in used_corpora:
-        raise ValueError("지원정책 문단에 policies 근거가 사용되지 않았습니다.")
-
-    if any(corpus_by_id[item] != "policies" for item in usage["policy"]):
-        raise ValueError("정책 문단의 evidence_id는 policies 근거만 사용할 수 있습니다.")
-    if not usage["policy"]:
-        raise ValueError("정책 문단에 사용된 policies evidence_id가 없습니다.")
-    if len(set(usage["policy"])) > 3:
-        raise ValueError("정책 문단에는 최대 3개의 정책 근거만 사용할 수 있습니다.")
+    if "policies" in used_corpora:
+        raise ValueError("독립 보고서에는 정책 근거를 사용하지 않습니다.")
 
 
 def _validate_draft_lengths(draft: NarrativeDraft) -> None:
@@ -211,7 +160,6 @@ def _validate_draft_lengths(draft: NarrativeDraft) -> None:
         "assessment_paragraph": (120, 600),
         "execution_plan_paragraph": (250, 1200),
         "risk_paragraph": (150, 750),
-        "policy_paragraph": (180, 800),
     }
     for field_name, (minimum, maximum) in limits.items():
         length = len(_normalize_paragraph(getattr(draft, field_name)))
@@ -233,11 +181,12 @@ def _validate_personalization(body: str, request: GenerationRequest) -> None:
             aliases.add(value.split()[-1].removesuffix("시").removesuffix("군"))
         return any(alias and alias in body for alias in aliases)
 
-    mandatory = [situation.target_region, situation.housing_preference]
+    unspecified = {"", "미정", "모름", "기타"}
+    mandatory = [v for v in (situation.target_region, situation.housing_preference) if v not in unspecified]
     missing = [value for value in mandatory if not reflected(value)]
     if missing:
         raise ValueError(f"개인화 필수 입력이 보고서에 반영되지 않았습니다: {missing}")
-    if not any(priority in body for priority in situation.priorities):
+    if situation.priorities and not any(priority in body for priority in situation.priorities):
         raise ValueError("사용자 우선순위가 보고서의 판단이나 실행 계획에 반영되지 않았습니다.")
 
     context_values = {
@@ -250,8 +199,9 @@ def _validate_personalization(body: str, request: GenerationRequest) -> None:
         situation.housing_preference,
         *situation.priorities,
     }
+    context_values -= unspecified
     reflected_values = {value for value in context_values if value and reflected(value)}
-    if len(reflected_values) < 5:
+    if len(reflected_values) < min(4, len(context_values)):
         raise ValueError(
             "사용자 상황이 충분히 개인화되지 않았습니다. "
             f"반영된 입력={sorted(reflected_values)}"
@@ -288,8 +238,14 @@ def _validate_percentages(body: str, payload: dict[str, object]) -> None:
 def generate_narrative_report(
     request: GenerationRequest,
     settings: GenerationSettings | None = None,
+    *, trace: dict | None = None,
 ) -> NarrativeReport:
     """Generate and validate one concise personalized report."""
+    # Legacy stored evidence may include policies. Keep it out of this service.
+    retained = [e for e in request.retrieved_context if e.corpus in {"guides", "cases"}]
+    if not retained:
+        raise ValueError("보고서용 guides/cases 근거가 없습니다. 정책 검색과 분리해 실행하세요.")
+    request = request.model_copy(update={"retrieved_context": retained})
     generation_settings = settings or GenerationSettings()
     model = create_report_model(generation_settings)
     structured_llm = model.with_structured_output(
@@ -311,6 +267,8 @@ def generate_narrative_report(
         "calculated_financial_context": _build_financial_context(request),
         "evidence": evidence_payload,
     }
+    if trace is not None:
+        trace["generation_payload"] = payload
     result = (prompt | structured_llm).invoke(
         {"payload": json.dumps(payload, ensure_ascii=False)}
     )
@@ -319,8 +277,13 @@ def generate_narrative_report(
         if isinstance(result, NarrativeDraft)
         else NarrativeDraft.model_validate(result)
     )
+    if trace is not None:
+        trace["draft"] = draft.model_dump(mode="json")
     _validate_evidence_usage(draft, corpus_by_id)
     _validate_draft_lengths(draft)
+    finance_scope = payload["calculated_financial_context"]["scope"]
+    if finance_scope != "complete" and draft.independence_assessment == "독립 진행이 적절함":
+        raise ValueError("부분 계산·정보 부족 상태에서 독립 진행을 확정할 수 없습니다.")
 
     sections: list[str] = []
     for index, (heading, field_name) in enumerate(SECTION_LAYOUT, start=1):
@@ -336,4 +299,6 @@ def generate_narrative_report(
     _validate_personalization(report.report_body_markdown, request)
     _validate_no_duplicate_sentences(report.report_body_markdown)
     _validate_percentages(report.report_body_markdown, payload)
+    if trace is not None:
+        trace["validation"] = "passed"
     return report

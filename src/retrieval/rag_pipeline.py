@@ -11,6 +11,7 @@ from src.config import CORPUS_NAMES, IngestSettings
 from src.common.embedding_factory import create_embeddings
 from src.common.vector_store import check_database, count_collection_rows, open_collection
 from src.generation.report_schema import GenerationRequest, RetrievedEvidence, UserSituation
+from src.finance.schema import FinancialResult
 
 
 MAX_CHARS_PER_CHUNK = 450
@@ -29,7 +30,11 @@ class SearchHit:
     distance: float
 
 
-def build_search_queries(situation: UserSituation) -> dict[str, tuple[str, ...]]:
+def build_search_queries(
+    situation: UserSituation, *,
+    corpora: tuple[str, ...] = ("guides", "cases", "policies"),
+    financial_result: FinancialResult | None = None,
+) -> dict[str, tuple[str, ...]]:
     """Build corpus-specific semantic searches from selected and free-form input."""
     priorities = " ".join(situation.priorities)
     situation_summary = (
@@ -37,7 +42,7 @@ def build_search_queries(situation: UserSituation) -> dict[str, tuple[str, ...]]
         f"{situation.target_region} 이동, {situation.housing_preference}, "
         f"{situation.move_timeline}, {priorities}, {situation.additional_context}"
     )
-    return {
+    queries = {
         "guides": (
             f"{situation_summary} 첫 자취 주택 임대차 계약 등기사항 보증금 월세 확인사항",
             f"{situation_summary} 이사 준비 이사업체 견적 이사 당일 전입신고 공과금",
@@ -45,13 +50,17 @@ def build_search_queries(situation: UserSituation) -> dict[str, tuple[str, ...]]
         ),
         "cases": (
             "청년 1인 가구 실제 월평균 생활비 식비 주거비 월세 지출 소득 공백 사례",
-            f"{situation.target_region} 취업 통근 주거 선택 청년 원룸 월세 독립 심층면접",
+            f"{situation.target_region} {situation.purpose} {situation.housing_preference} {priorities} 주거 선택 청년 독립 심층면접",
         ),
         "policies": (
-            f"2026 {situation.target_region} 청년월세지원 사업 지원대상 신청자격 지원금액 지원기간 모집",
-            f"2026 {situation.target_region} 청년 부동산 중개보수 이사비 지원대상 지원금액 주택조건",
+            f"{situation.target_region} {situation.housing_preference} 청년 주거 지원 모집공고 지원내용 신청절차",
+            f"{situation.target_region} {situation.employment_status} {situation.education_status} 청년 지원 공고 대상 기간",
         ),
     }
+    if financial_result:
+        for corpus in ("guides", "cases"):
+            queries[corpus] += tuple(f"{situation_summary} {hint}" for hint in financial_result.query_hints)
+    return {name: values for name, values in queries.items() if name in corpora}
 
 
 def _document_key(document: Document) -> tuple[str, int, str]:

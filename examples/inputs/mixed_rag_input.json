@@ -1,0 +1,13 @@
+{
+  "schema_version": "3",
+  "selections": {
+    "purpose": "work", "employment": "employed", "education": "graduated",
+    "current_region": "gyeonggi", "target_region": "seoul", "timeline": "quarter",
+    "housing": "monthly", "income_status": "current", "homeowner": "no",
+    "experience": "first", "property_type": "unknown", "priorities": ["commute", "safety"]
+  },
+  "numbers": {
+    "age": 27, "household_size": 1, "available_cash_krw": 10000000,
+    "monthly_income_krw": 2200000, "existing_fixed_cost_krw": 100000
+  }
+}

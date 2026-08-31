@@ -87,8 +87,6 @@ class ReportGenerationTest(unittest.TestCase):
             execution_evidence_ids=["G1", "C1"],
             risk_paragraph=_paragraph("보증금과 안전 위험", 11),
             risk_evidence_ids=["G1"],
-            policy_paragraph=_paragraph("서울 청년 지원정책", 12),
-            policy_evidence_ids=["P1"],
         )
 
     def test_internal_evidence_ids_cover_each_corpus(self) -> None:
@@ -110,8 +108,6 @@ class ReportGenerationTest(unittest.TestCase):
             + draft.execution_plan_paragraph
             + "\n\n## 3. 내 상황에서 조심할 점\n\n"
             + draft.risk_paragraph
-            + "\n\n## 4. 우선 확인할 지원정책\n\n"
-            + draft.policy_paragraph
         )
         report = NarrativeReport(
             report_title=draft.report_title,
