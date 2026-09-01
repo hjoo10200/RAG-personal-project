@@ -1,101 +1,40 @@
 "use strict";
-const labels = {purpose:"독립 목적",employment:"고용 상태",education:"학업 상태",current_region:"현재 지역",target_region:"희망 지역",timeline:"독립 시기",housing:"주거 선호",income_status:"독립 후 수입 상태",homeowner:"본인 주택 보유",experience:"자취 경험",property_type:"알아본 건물 유형",priorities:"우선순위 · 복수 선택"};
-let options, busy = false;
-const statusLine = document.getElementById("status");
-function element(tag, text, parent) { const node = document.createElement(tag); node.textContent = text; if(parent) parent.append(node); return node; }
-function values() {
-  const selections = {}, numbers = {};
-  for (const field of document.querySelectorAll("#fields select")) {
-    selections[field.name] = field.multiple ? Array.from(field.selectedOptions, o=>o.value) : field.name === "age" ? Number(field.value) : field.value;
-  }
-  for (const field of document.querySelectorAll('input[type="number"]')) numbers[field.name] = field.value === "" ? null : Number(field.value);
-  return {schema_version:"3", selections, numbers};
-}
-function refresh() {
-  const state = document.querySelector('[name="income_status"]').value;
-  const income = document.querySelector('[name="monthly_income_krw"]');
-  income.disabled = state === "none" || state === "unknown";
-  if (income.disabled) income.value = state === "none" ? "0" : "";
-  document.getElementById("inputJson").textContent = JSON.stringify(values(), null, 2);
-}
-function paragraphReport(body, parent) {
-  for(const block of body.split(/\n\n+/)) {
-    element(block.startsWith("## ") ? "h3" : "p", block.replace(/^## /, "").replace(/\*\*/g,""), parent);
-  }
-}
-function showResult(action, result) {
-  const output = document.getElementById("output"); output.replaceChildren();
-  if(action === "report") {
-    element("h3", result.report.report_title, output); paragraphReport(result.report.report_body_markdown, output);
-    element("p", "저장 실행 ID: " + result.run_id, output);
-  } else if(action === "policies") {
-    element("p", result.notice, output);
-    if(!result.policies.length) element("p", "검색 결과가 없습니다. 정책 문서 적재 상태와 선택 조건을 확인하세요.", output);
-    for(const policy of result.policies) {
-      const card = element("article", "", output); card.className = "policy";
-      element("h3", policy.title, card); element("p", policy.application_period, card);
-      element("p", policy.notice, card);
-      for(const excerpt of policy.excerpts) element("p", `p.${excerpt.page_number} · ${excerpt.content}`, card);
-      if(policy.source_url) { try { const url = new URL(policy.source_url); if(["http:","https:"].includes(url.protocol)) { const link = element("a", "원문 확인", card); link.href=url.href;link.target="_blank";link.rel="noopener noreferrer"; } } catch {} }
-      element("small", policy.source_file, card);
-    }
-  } else {
-    const names = {complete:"가정 범위 계산 완료",partial:"일부 항목 계산",unavailable:"비용 근거 부족"};
-    element("h3", names[result.scope] || result.scope, output);
-    element("p", "초기 자금: " + result.initial_status, output);
-    element("p", "월 현금흐름: " + result.monthly_status, output);
-    const amountLabels = {housing_utilities_capacity_krw:"참고 생활비 차감 후 월 주거·수도·광열 탐색 잔여액",known_initial_cost_krw:"확인된 초기 비용 소계",after_known_initial_cost_krw:"확인된 초기 비용 차감 후 잔액",known_monthly_cost_krw:"계산에 포함한 월 지출 소계",after_known_monthly_cost_krw:"계산에 포함한 월 지출 차감 후 잔액",brokerage_ceiling_excluding_vat_krw:"서울 일반 주택 중개보수 상한 (부가세 별도)"};
-    for(const [key,label] of Object.entries(amountLabels)) {
-      const b=result.amounts[key]; if(!b) continue;
-      const amount=b.lower===b.upper ? b.lower.toLocaleString("ko-KR")+"원" : `${b.lower===null?"하한 미정":b.lower.toLocaleString("ko-KR")+"원"} ~ ${b.upper===null?"상한 미정":b.upper.toLocaleString("ko-KR")+"원"}`;
-      element("p",label+": "+amount,output);
-    }
-    for(const note of result.assumptions) element("p", note, output);
-    element("p", "상세 범위와 미확인 항목은 검증용 결과 JSON에서 확인할 수 있습니다.", output);
-  }
-}
-async function execute(action) {
-  if(busy || !document.getElementById("situation").reportValidity()) return; busy=true;
-  document.querySelectorAll("button[data-action]").forEach(b=>b.disabled=true);
-  const input = values();
-  document.getElementById("output").replaceChildren();
-  document.getElementById("resultJson").textContent="";
-  document.querySelectorAll("#situation select, #situation input").forEach(field=>field.disabled=true);
-  statusLine.className=""; statusLine.textContent="처리 중입니다. 실제 검색·생성은 시간이 걸릴 수 있습니다.";
-  try {
-    const response = await fetch("/api/"+action, {method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":options.csrf},body:JSON.stringify(input)});
-    const result = await response.json();
-    if(!response.ok) throw new Error(result.error || "요청 실패");
-    document.getElementById("resultJson").textContent=JSON.stringify(result,null,2);
-    showResult(action,result); statusLine.textContent="완료했습니다. 실행에 사용한 입력과 결과를 아래에서 확인하세요.";
-    document.getElementById("inputJson").textContent=JSON.stringify(input,null,2);
-  } catch(error) { statusLine.className="error";statusLine.textContent=error.message; }
-  finally {
-    busy=false;
-    document.querySelectorAll("#situation select, #situation input").forEach(field=>field.disabled=false);
-    refresh();
-    document.querySelectorAll("button[data-action]").forEach(b=>b.disabled=b.dataset.action!=="calculate"&&!options.external_enabled);
-  }
-}
-async function start() {
-  const response=await fetch("/api/options"); if(!response.ok) throw new Error("페이지 설정을 불러오지 못했습니다."); options=await response.json();
-  const fields=document.getElementById("fields");
-  for(const [name,label] of Object.entries(labels)) {
-    const wrap=element("label",label,fields);const select=document.createElement("select");select.name=name;select.id=name;select.multiple=name==="priorities";
-    const choices=options.choices[name];
-    for(const [code,title] of Object.entries(choices)) { const option=element("option",title,select);option.value=code;option.selected=Array.isArray(options.defaults[name])?options.defaults[name].includes(code):String(options.defaults[name])===String(code); }
-    wrap.append(select);
-    select.addEventListener("change",()=>{refresh();statusLine.textContent="선택이 변경되었습니다. 기존 결과를 갱신하려면 다시 실행하세요.";});
-  }
-  document.getElementById("mode").textContent=options.external_enabled?"실제 검색 모드 · 보고서와 정책 검색은 API 사용료가 발생할 수 있습니다. 자동 실행하지 않습니다.":"오프라인 계산 모드 · 실제 검색·생성은 --enable-external로 서버를 실행해야 합니다.";
-  for(const button of document.querySelectorAll("button[data-action]")){button.disabled=button.dataset.action!=="calculate"&&!options.external_enabled;button.addEventListener("click",()=>execute(button.dataset.action));}
-  const basic=new Set(["age","household_size","available_cash_krw","monthly_income_krw","existing_fixed_cost_krw"]);
-  for(const [name,label] of Object.entries(options.number_fields)) {
-    const wrap=element("label",label,document.getElementById(basic.has(name)?"numbers":"optionalNumbers"));
-    const input=document.createElement("input");input.type="number";input.name=name;input.id=name;input.step="1";input.min=name==="household_size"?"1":"0";input.max=name==="age"?"120":name==="household_size"?"20":"10000000000000";input.inputMode="numeric";
-    input.value=options.number_defaults[name]??"";input.required=["age","household_size"].includes(name);input.placeholder="모름은 비워 두세요";
-    input.addEventListener("input",()=>{refresh();statusLine.textContent="입력이 변경되었습니다. 결과를 갱신하려면 다시 실행하세요.";});wrap.append(input);
-  }
-  document.getElementById("situation").addEventListener("submit",event=>event.preventDefault()); refresh();
-}
-start().catch(error=>{statusLine.className="error";statusLine.textContent=error.message;});
+
+const labels={purpose:"독립 목적",employment:"현재 고용 상태",education:"학업 상태",current_region:"현재 거주 지역",target_region:"독립 희망 지역",timeline:"희망 시기",housing:"원하는 주거 형태",income_status:"독립 후 수입",homeowner:"본인 명의 주택",experience:"자취 경험",property_type:"알아본 건물 유형"};
+const help={age:"만 나이",household_size:"본인을 포함합니다",available_cash_krw:"독립에 실제 사용할 수 있는 돈",monthly_income_krw:"독립 후 매달 들어오는 세후 금액",existing_fixed_cost_krw:"부채상환·가족지원 등"};
+let options=null,busy=false,lastInput=null,lastReport=null;
+const $=id=>document.getElementById(id);
+
+function node(tag,text,parent,className){const el=document.createElement(tag);if(text!==undefined)el.textContent=text;if(className)el.className=className;if(parent)parent.append(el);return el}
+function currentInput(){const selections={},numbers={};document.querySelectorAll("#fields select").forEach(el=>selections[el.name]=el.value);selections.priorities=Array.from(document.querySelectorAll('#priorities input:checked'),el=>el.value);document.querySelectorAll('#situation input[type="number"]').forEach(el=>numbers[el.name]=el.value===""?null:Number(el.value));return{schema_version:"3",selections,numbers}}
+function inputChanged(){if(lastInput)$('stale').hidden=false;syncIncome();const disabled=!options.external_enabled||!$('consent').checked;$('submitReport').disabled=disabled;$('submitPolicies').disabled=disabled;}
+function syncIncome(){const state=document.querySelector('[name="income_status"]')?.value,income=document.querySelector('[name="monthly_income_krw"]');if(!income)return;income.disabled=state==="none"||state==="unknown";if(income.disabled)income.value=state==="none"?"0":"";}
+function makeSelect(name,parent){const wrap=node("label",undefined,parent,"field");node("span",labels[name],wrap);const select=node("select",undefined,wrap);select.name=name;select.required=name==="purpose";for(const[code,title]of Object.entries(options.choices[name])){const o=node("option",title,select);o.value=code;o.selected=String(options.defaults[name])===code}select.addEventListener("change",inputChanged)}
+function makeNumber(name,label,parent){const wrap=node("label",undefined,parent,"field");node("span",label,wrap);const input=node("input",undefined,wrap);input.type="number";input.name=name;input.min=name==="household_size"?"1":"0";input.max=name==="age"?"120":name==="household_size"?"20":"10000000000000";input.step="1";input.inputMode="numeric";input.required=name==="age"||name==="household_size";input.value=name==="household_size"?"1":"";input.placeholder=name==="age"?"예: 27":"모르면 비워 두세요";node("small",help[name]||"확인한 금액만 입력",wrap);input.addEventListener("input",inputChanged)}
+function buildForm(){const order=["purpose","employment","education","current_region","target_region","timeline","housing","income_status","homeowner","experience","property_type"];order.forEach(name=>makeSelect(name,$('fields')));for(const[code,title]of Object.entries(options.choices.priorities)){const label=node("label",undefined,$('priorities').querySelector('.chips'),"chip");const input=node("input",undefined,label);input.type="checkbox";input.value=code;input.addEventListener("change",inputChanged);node("span",title,label)}const basic=new Set(["age","household_size","available_cash_krw","monthly_income_krw","existing_fixed_cost_krw"]);for(const[name,label]of Object.entries(options.number_fields))makeNumber(name,label,$(basic.has(name)?"numbers":"optionalNumbers"));syncIncome()}
+function showView(name){document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===name)));for(const view of ["finance","report","policies"])$(view+'View').hidden=name!==view}
+function renderSnapshot(input){$('snapshot').replaceChildren();const s=input.selections,n=input.numbers;[options.choices.purpose[s.purpose],n.age?`${n.age}세`:null,options.choices.current_region[s.current_region]+" → "+options.choices.target_region[s.target_region],options.choices.housing[s.housing]].filter(Boolean).forEach(value=>node("span",value,$('snapshot')))}
+function renderMarkdown(body,parent){for(const block of body.split(/\n\n+/)){if(!block.trim())continue;const heading=block.startsWith("## ");node(heading?"h3":"p",block.replace(/^##\s*/,"").replace(/\*\*/g,""),parent)}}
+function renderReport(result){$('reportBody').replaceChildren();node("h3",result.report.report_title,$('reportBody'),"report-title");renderMarkdown(result.report.report_body_markdown,$('reportBody'));lastReport=result.report;$('download').hidden=false;$('reportView').querySelector('.retry').hidden=true}
+const amountLabels={available_cash_krw:"현재 가용자금",regular_income_krw:"월 정기수입",known_initial_cost_krw:"확인된 초기비용",after_known_initial_cost_krw:"초기비용 반영 후",known_monthly_cost_krw:"확인된 월 비용",after_known_monthly_cost_krw:"월 비용 반영 후",housing_utilities_capacity_krw:"주거·공과금 탐색 여력",deposit_capacity_krw:"보증금 탐색 여력",housing_capacity_krw:"주거비 탐색 여력"};
+const missingLabels={deposit:"보증금",moving:"이사비",brokerage:"중개보수",setup:"초기 구입·설치비",rent:"월세",management:"관리비",living:"주거 외 생활비",fixed:"기존 필수지출",utilities:"관리비 외 공과금",available_cash:"가용자금",regular_income:"정기수입","생활비 일부 항목":"생활비 일부 항목","기존 필수 지출 일부 항목":"기존 필수지출 일부 항목"};
+function money(range){if(!range)return"미확인";const format=value=>new Intl.NumberFormat("ko-KR").format(value)+"원";if(range.lower===range.upper)return format(range.lower);if(range.lower===null)return format(range.upper)+" 이하";if(range.upper===null)return format(range.lower)+" 이상";return format(range.lower)+" ~ "+format(range.upper)}
+function dashboardCard(parent,label,range,tone){const card=node("article",undefined,parent,"money-card "+(tone||""));node("span",label,card);node("strong",money(range),card);return card}
+function comparison(parent,title,resource,cost,balance){const section=node("section",undefined,parent,"cost-compare");node("h3",title,section);const grid=node("div",undefined,section,"compare-grid");dashboardCard(grid,"사용 가능한 금액",resource);dashboardCard(grid,"반영된 비용",cost);const negative=balance&&balance.upper!==null&&balance.upper<0;dashboardCard(grid,"반영 후 잔액",balance,negative?"negative":"balance")}
+function renderFinance(finance){const parent=$('financeBody');parent.replaceChildren();if(!finance){node("p","비용 계산 결과를 받지 못했습니다.",parent,"error");return}const status=node("div",undefined,parent,"finance-status");const initial=node("article",undefined,status,"status-card");node("span","초기자금 판단",initial);node("strong",finance.initial_status,initial);const monthly=node("article",undefined,status,"status-card");node("span","월 유지 판단",monthly);node("strong",finance.monthly_status,monthly);const scope=node("article",undefined,status,"status-card");node("span","계산 범위",scope);node("strong",finance.scope==="complete"?"전체 항목":finance.scope==="partial"?"입력·기준이 있는 항목":"계산 불가",scope);comparison(parent,"독립 시작 비용",finance.amounts.available_cash_krw,finance.amounts.known_initial_cost_krw,finance.amounts.after_known_initial_cost_krw);comparison(parent,"매달 유지 비용",finance.amounts.regular_income_krw,finance.amounts.known_monthly_cost_krw,finance.amounts.after_known_monthly_cost_krw);const extras=node("div",undefined,parent,"money-grid");for(const key of ["deposit_capacity_krw","housing_utilities_capacity_krw","housing_capacity_krw"]){if(finance.amounts[key])dashboardCard(extras,amountLabels[key],finance.amounts[key],"capacity")}if(finance.missing?.length){const box=node("section",undefined,parent,"finance-note");node("h3","아직 확인해야 할 비용",box);node("p",finance.missing.map(key=>missingLabels[key]||key).join(" · "),box)}if(finance.assumptions?.length){const details=node("details",undefined,parent,"finance-details");node("summary","계산 기준과 가정 보기",details);finance.assumptions.forEach(item=>node("p",item,details))}}
+function safeExternalLink(url,label,parent){try{const parsed=new URL(url);if(!["http:","https:"].includes(parsed.protocol))return;const a=node("a",label,parent);a.href=parsed.href;a.target="_blank";a.rel="noopener noreferrer"}catch{}}
+function renderPolicies(result){const parent=$('policyBody');parent.replaceChildren();$('policyCount').textContent=result.policies.length?String(result.policies.length):"";if(!result.policies.length){node("p","현재 입력과 관련된 정책 문서를 찾지 못했습니다. 지역·주거 조건을 확인하거나 나중에 다시 검색해 주세요.",parent,"empty");return}result.policies.forEach((p,index)=>{const card=node("article",undefined,parent,"policy");node("p",`${index+1}번째 관련 정책 · ${p.application_period}`,card,"eyebrow");node("h3",p.title,card);if(p.topics?.length)node("p","검색 주제: "+p.topics.join(" · "),card,"topics");node("p",p.notice,card);const details=node("details",undefined,card);node("summary","공고에서 찾은 내용",details);p.excerpts.slice(0,3).forEach(e=>node("p",e.content,details));const links=node("div",undefined,card,"policy-links");const local=node("a","수집된 공고문 보기",links);local.href=p.document_url;local.target="_blank";local.rel="noopener";if(p.source_url)safeExternalLink(p.source_url,"공식 페이지 확인",links)});$('policiesView').querySelector('.retry').hidden=true}
+function renderBranch(name,branch){const retry=$(name+'View').querySelector('.retry');if(branch?.status==="completed"){name==="report"?renderReport(branch.data):renderPolicies(branch.data);retry.hidden=true}else{const parent=$(name==="report"?'reportBody':'policyBody');parent.replaceChildren();node("p",branch?.message||"결과를 가져오지 못했습니다.",parent,"error");retry.hidden=false}}
+async function fetchLocal(url,init){try{return await fetch(url,init)}catch(error){if(error instanceof TypeError)throw new Error("로컬 서버와 연결이 끊겼습니다. 실행 터미널이 열려 있는지 확인한 뒤 서버를 다시 실행하고 페이지를 새로고침해 주세요.");throw error}}
+async function request(action,payload){const response=await fetchLocal('/api/'+action,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':options.csrf},body:JSON.stringify(payload)});const body=await response.json();if(!response.ok)throw new Error(body.error||"요청에 실패했습니다.");return body}
+const stageText={queued:"준비",retrieving:"문서 검색 중",generating:"보고서 작성 중",completed:"완료",failed:"실패"};
+function showProgress(action,job){$('progress').hidden=false;const isReport=action==="report",stage=job?.stage||"queued",active=$(isReport?'reportProgress':'policyProgress'),inactive=$(isReport?'policyProgress':'reportProgress');active.hidden=false;inactive.hidden=true;active.textContent=(isReport?"보고서 · ":"정책 · ")+(stageText[stage]||"처리 중");active.className=stage==="completed"?"done":stage==="failed"?"failed":stage==="queued"?"":"active";$('progressTitle').textContent=isReport?"독립 보고서를 만들고 있습니다":"지원정책을 찾고 있습니다";if(stage==="generating")$('progressDetail').textContent="검색 근거를 바탕으로 AI가 보고서 본문을 작성하고 있습니다.";else if(stage==="retrieving")$('progressDetail').textContent=isReport?"가이드와 실제 사례 문서를 검색하고 있습니다.":"입력 조건에 맞는 정책 문서를 검색하고 있습니다.";else $('progressDetail').textContent="요청을 준비하고 있습니다."}
+async function createJob(action,payload){const endpoint=action==="report"?"report-jobs":"policy-jobs";const response=await fetchLocal('/api/'+endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':options.csrf},body:JSON.stringify(payload)});const body=await response.json();if(!response.ok)throw new Error(body.error||"작업을 시작하지 못했습니다.");return body.job_id}
+async function waitForJob(action,jobId){const deadline=Date.now()+15*60*1000;while(Date.now()<deadline){const response=await fetchLocal('/api/jobs/'+encodeURIComponent(jobId),{headers:{'X-CSRF-Token':options.csrf},cache:'no-store'});const job=await response.json();if(!response.ok)throw new Error(job.error||"진행 상태를 확인하지 못했습니다.");showProgress(action,job);if(job.status==="completed")return job.result;if(job.status==="failed")throw new Error(action==="report"?"독립 보고서를 만들지 못했습니다.":"지원정책을 찾지 못했습니다.");await new Promise(resolve=>setTimeout(resolve,750))}throw new Error("처리 시간이 너무 길어졌습니다. 서버 기록에서 진행 상태를 확인해 주세요.")}
+function setBusy(value){busy=value;$('results').setAttribute('aria-busy',String(value));document.querySelectorAll('#situation input,#situation select,#situation button').forEach(el=>el.disabled=value);if(!value){syncIncome();inputChanged()}}
+async function runAction(action){if(busy||!$('situation').reportValidity())return;lastInput=currentInput();renderSnapshot(lastInput);$('stale').hidden=true;$('status').className="";$('status').textContent=action==="report"?"비용을 계산하고 독립 보고서를 만들고 있습니다.":"입력 조건과 관련된 지원정책을 찾고 있습니다.";showProgress(action);setBusy(true);$('results').scrollIntoView({behavior:'smooth',block:'start'});try{const jobId=await createJob(action,lastInput);const result=await waitForJob(action,jobId);if(action==="report"){renderFinance(result.finance);renderReport(result);showView('finance');$('status').textContent="비용 분석과 독립 보고서를 완성했습니다."}else{renderPolicies(result);showView('policies');$('status').textContent="관련 지원정책 검색을 완료했습니다."}}catch(error){const parent=$(action==="report"?'reportBody':'policyBody');parent.replaceChildren();node("p",error.message,parent,"error");$(action+'View').querySelector('.retry').hidden=false;$('status').textContent=error.message;$('status').className="error"}finally{$('progress').hidden=true;setBusy(false)}}
+async function submitPlan(event){event.preventDefault();await runAction('report')}
+async function retry(name){if(!lastInput)return;await runAction(name)}
+function downloadReport(){if(!lastReport)return;const blob=new Blob([lastReport.report_title+"\n\n"+lastReport.report_body_markdown],{type:'text/markdown;charset=utf-8'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='나의_독립_계획.md';a.click();URL.revokeObjectURL(url)}
+async function start(){const response=await fetchLocal('/api/options');if(!response.ok)throw new Error("서비스 설정을 불러오지 못했습니다.");options=await response.json();if(options.api_version!==2)throw new Error("이전 버전 서버가 실행 중입니다. 서버 터미널에서 Ctrl+C로 종료한 뒤 다시 실행하고 페이지를 새로고침해 주세요.");buildForm();$('mode').textContent=options.external_enabled?"실제 서비스 모드입니다. 독립 보고서와 지원정책 검색을 필요한 때 각각 실행하세요.":"오프라인 화면 확인 모드입니다. 실제 결과를 받으려면 서버를 기본 명령으로 다시 실행해 주세요.";$('situation').addEventListener('submit',submitPlan);$('submitPolicies').addEventListener('click',()=>runAction('policies'));$('consent').addEventListener('change',inputChanged);document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.view)));document.querySelectorAll('[data-retry]').forEach(b=>b.addEventListener('click',()=>retry(b.dataset.retry)));$('download').addEventListener('click',downloadReport);$('submitReport').disabled=true;$('submitPolicies').disabled=true}
+start().catch(error=>{$('mode').textContent=error.message;$('mode').className='notice error'});

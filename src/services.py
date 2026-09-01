@@ -33,7 +33,7 @@ def _save(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def create_report(payload: dict, *, output_root: Path = OUTPUT_ROOT) -> dict:
+def create_report(payload: dict, *, output_root: Path = OUTPUT_ROOT, progress_callback=None) -> dict:
     # No web framework types cross this boundary.
     from src.generation.report_generator import generate_narrative_report
     from src.retrieval.hybrid_pipeline import retrieve_hybrid_evidence
@@ -45,9 +45,13 @@ def create_report(payload: dict, *, output_root: Path = OUTPUT_ROOT) -> dict:
     _save(directory / "finance.json", finance.model_dump(mode="json"))
     trace: dict = {"pipeline_version": "report-v2", "status": "running", "stage": "retrieval"}
     try:
+        if progress_callback:
+            progress_callback("retrieving")
         generation_request = retrieve_hybrid_evidence(request.situation, finance)
         _save(directory / "evidence.json", generation_request.model_dump(mode="json"))
         trace["stage"] = "generation"
+        if progress_callback:
+            progress_callback("generating")
         report = generate_narrative_report(generation_request, trace=trace)
         result = {"pipeline_version": "report-v2", "run_id": run_id,
                   "report": report.model_dump(), "finance": finance.model_dump(mode="json")}
@@ -63,11 +67,13 @@ def create_report(payload: dict, *, output_root: Path = OUTPUT_ROOT) -> dict:
         _save(directory / "trace.json", trace)
 
 
-def search_policies(payload: dict, *, output_root: Path = OUTPUT_ROOT) -> dict:
+def search_policies(payload: dict, *, output_root: Path = OUTPUT_ROOT, progress_callback=None) -> dict:
     """Policy retrieval does not invoke the calculator or report LLM."""
     from src.retrieval.hybrid_pipeline import retrieve_evidence
 
     request = parse_request(payload)
+    if progress_callback:
+        progress_callback("retrieving")
     evidence = retrieve_evidence(request.situation, corpora=("policies",), allow_empty=True)
     metadata_path = ROOT / "knowledge_base" / "metadata" / "search_metadata.json"
     metadata = json.loads(metadata_path.read_text(encoding="utf-8")).get("documents", {}) if metadata_path.exists() else {}
@@ -96,20 +102,38 @@ def search_policies(payload: dict, *, output_root: Path = OUTPUT_ROOT) -> dict:
     return result
 
 
-def create_plan(payload: dict, *, output_root: Path = OUTPUT_ROOT) -> dict:
+def create_plan(payload: dict, *, output_root: Path = OUTPUT_ROOT, progress_callback=None) -> dict:
     """One user submission; independent real report and policy services.
 
     No sample/fallback content is substituted on failure. Successful branches
     remain available and can be reused when the client retries only a failure.
     """
-    parse_request(payload)  # Invalid input must fail before either paid branch.
+    request = parse_request(payload)  # Invalid input must fail before either paid branch.
+    # Finance is a local deterministic step. Keep it outside the report branch so
+    # the dashboard remains available even when retrieval or generation fails.
+    finance = prepare_finances(request.situation).model_dump(mode="json")
     run_id, directory = _new_run(output_root)
     _save(directory / "input.json", payload)
-    result = {"pipeline_version": "service-prototype-v1", "run_id": run_id}
+    _save(directory / "finance.json", finance)
+    result = {"pipeline_version": "service-prototype-v2", "run_id": run_id, "finance": finance}
+    def notify(branch, stage):
+        if progress_callback:
+            progress_callback(branch, stage)
+
+    def run_branch(branch, function):
+        try:
+            value = function(deepcopy(payload), output_root=output_root,
+                             progress_callback=lambda stage: notify(branch, stage))
+            notify(branch, "completed")
+            return value
+        except Exception:
+            notify(branch, "failed")
+            raise
+
     with ThreadPoolExecutor(max_workers=2) as executor:
         futures = {
-            "report": executor.submit(create_report, deepcopy(payload), output_root=output_root),
-            "policies": executor.submit(search_policies, deepcopy(payload), output_root=output_root),
+            "report": executor.submit(run_branch, "report", create_report),
+            "policies": executor.submit(run_branch, "policies", search_policies),
         }
         for name, future in futures.items():
             try:

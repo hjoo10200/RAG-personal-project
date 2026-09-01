@@ -125,6 +125,24 @@ class FinanceTests(unittest.TestCase):
 
 
 class PipelineTests(unittest.TestCase):
+    def test_combined_plan_keeps_successful_branch(self):
+        from src import services
+        stages = []
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(services, "create_report", return_value={"report": {"report_title": "fixture", "report_body_markdown": "fixture"}}), \
+             patch.object(services, "search_policies", side_effect=RuntimeError("fixture failure")):
+            result = services.create_plan(selection_payload(), output_root=Path(tmp),
+                                          progress_callback=lambda branch, stage: stages.append((branch, stage)))
+        self.assertEqual(result["status"], "partial")
+        self.assertEqual(result["pipeline_version"], "service-prototype-v2")
+        self.assertIn("finance", result)
+        self.assertIn("amounts", result["finance"])
+        self.assertEqual(result["report"]["status"], "completed")
+        self.assertEqual(result["policies"]["status"], "failed")
+        self.assertNotIn("fixture failure", result["policies"]["message"])
+        self.assertIn(("report", "completed"), stages)
+        self.assertIn(("policies", "failed"), stages)
+
     def test_report_checks_only_selected_corpora(self):
         from langchain_core.documents import Document
         from src.retrieval import hybrid_pipeline as hp
@@ -177,6 +195,7 @@ class TestPageTests(unittest.TestCase):
             self.assertIn("나의 상황",response.read().decode())
         with urllib.request.urlopen(self.base+"/api/options") as response:
             options=json.load(response)
+        self.assertEqual(options["api_version"], 2)
         request=urllib.request.Request(self.base+"/api/calculate",data=json.dumps(selection_payload()).encode(),headers={"Content-Type":"application/json","Origin":self.base,"X-CSRF-Token":options["csrf"]})
         with urllib.request.urlopen(request) as response:
             self.assertEqual(json.load(response)["scope"],"partial")
@@ -194,6 +213,55 @@ class TestPageTests(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as error:
             urllib.request.urlopen(request)
         self.assertEqual(error.exception.code,403)
+
+    def test_report_and_policy_jobs_are_independent(self):
+        from src.test_page import build_handler
+        calls = []
+
+        def report(payload, *, progress_callback=None):
+            calls.append("report")
+            progress_callback("retrieving")
+            progress_callback("generating")
+            return {"report": {"report_title": "fixture", "report_body_markdown": "fixture"}, "finance": {"amounts": {}}}
+
+        def policies(payload, *, progress_callback=None):
+            calls.append("policies")
+            progress_callback("retrieving")
+            return {"policies": []}
+
+        actions = {"calculate": lambda payload: {}, "plan": lambda payload, **kwargs: {},
+                   "report": report, "policies": policies}
+        server = ThreadingHTTPServer(("127.0.0.1", 0), build_handler(enable_external=True, actions=actions))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = f"http://127.0.0.1:{server.server_port}"
+        try:
+            with urllib.request.urlopen(base + "/api/options") as response:
+                token = json.load(response)["csrf"]
+
+            def execute(endpoint):
+                request = urllib.request.Request(base + endpoint, data=json.dumps(selection_payload()).encode(),
+                                                 headers={"Content-Type": "application/json", "Origin": base,
+                                                          "X-CSRF-Token": token})
+                with urllib.request.urlopen(request) as response:
+                    job_id = json.load(response)["job_id"]
+                status_request = urllib.request.Request(base + "/api/jobs/" + job_id,
+                                                        headers={"X-CSRF-Token": token})
+                for _ in range(100):
+                    with urllib.request.urlopen(status_request) as response:
+                        job = json.load(response)
+                    if job["status"] != "running":
+                        return job
+                self.fail("독립 작업이 완료되지 않았습니다.")
+
+            policy_job = execute("/api/policy-jobs")
+            self.assertEqual(policy_job["action"], "policies")
+            self.assertEqual(calls, ["policies"])
+            report_job = execute("/api/report-jobs")
+            self.assertEqual(report_job["action"], "report")
+            self.assertEqual(calls, ["policies", "report"])
+        finally:
+            server.shutdown(); server.server_close(); thread.join(timeout=2)
 
 
 if __name__ == "__main__":

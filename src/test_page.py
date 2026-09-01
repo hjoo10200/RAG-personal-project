@@ -6,13 +6,15 @@ import argparse
 import json
 import secrets
 import threading
+import time
+from copy import deepcopy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote
 
 from pydantic import ValidationError
 
-from src.common.selection_input import CHOICES, NUMBER_FIELDS, NumericInputs, ProfileChoices
+from src.common.selection_input import CHOICES, NUMBER_FIELDS, NumericInputs, ProfileChoices, parse_request
 
 ASSETS = Path(__file__).resolve().parent / "web"
 POLICY_DOCUMENTS = Path(__file__).resolve().parents[1] / "knowledge_base" / "pdfs" / "policies"
@@ -24,6 +26,76 @@ def build_handler(*, enable_external: bool = False, actions: dict | None = None)
     functions = actions or {"calculate": calculate, "plan": create_plan, "report": create_report, "policies": search_policies}
     token = secrets.token_urlsafe(32)
     lock = threading.Lock()
+    jobs_lock = threading.Lock()
+    jobs: dict[str, dict] = {}
+
+    def reserve_job(action):
+        job_id = secrets.token_urlsafe(18)
+        with jobs_lock:
+            if any(value["status"] == "running" for value in jobs.values()):
+                raise RuntimeError("다른 작업을 처리하고 있습니다.")
+            finished = sorted((value for value in jobs.values() if value["status"] != "running"), key=lambda value: value["created_at"])
+            while len(jobs) >= 100 and finished:
+                jobs.pop(finished.pop(0)["job_id"], None)
+            if len(jobs) >= 100:
+                raise RuntimeError("처리 대기열이 가득 찼습니다.")
+            jobs[job_id] = {"job_id": job_id, "action": action, "status": "running",
+                            "created_at": time.time(), "stage": "queued", "result": None}
+        return job_id
+
+    def start_action_job(payload, action):
+        parse_request(payload)
+        if action not in {"report", "policies"}:
+            raise ValueError("지원하지 않는 작업입니다.")
+        job_id = reserve_job(action)
+
+        def progress(stage):
+            with jobs_lock:
+                if job_id in jobs:
+                    jobs[job_id]["stage"] = stage
+
+        def work():
+            try:
+                result = functions[action](payload, progress_callback=progress)
+                with jobs_lock:
+                    jobs[job_id].update(status="completed", stage="completed", result=result)
+            except Exception as error:
+                print(f"[job:{job_id}] {action}: {type(error).__name__}", flush=True)
+                with jobs_lock:
+                    jobs[job_id].update(status="failed", stage="failed", error_type=type(error).__name__)
+        threading.Thread(target=work, daemon=True, name=f"{action}-{job_id[:6]}").start()
+        return job_id
+
+    def start_plan_job(payload):
+        parse_request(payload)
+        job_id = secrets.token_urlsafe(18)
+        with jobs_lock:
+            if any(value["status"] == "running" for value in jobs.values()):
+                raise RuntimeError("다른 독립 계획을 만들고 있습니다.")
+            finished = sorted((value for value in jobs.values() if value["status"] != "running"), key=lambda value: value["created_at"])
+            while len(jobs) >= 100 and finished:
+                jobs.pop(finished.pop(0)["job_id"], None)
+            if len(jobs) >= 100:
+                raise RuntimeError("처리 대기열이 가득 찼습니다.")
+            jobs[job_id] = {"job_id": job_id, "status": "running", "created_at": time.time(),
+                            "report_stage": "queued", "policies_stage": "queued", "result": None}
+
+        def progress(branch, stage):
+            with jobs_lock:
+                if job_id in jobs:
+                    jobs[job_id][f"{branch}_stage"] = stage
+
+        def work():
+            try:
+                result = functions["plan"](payload, progress_callback=progress)
+                with jobs_lock:
+                    jobs[job_id].update(status="completed", result=result)
+            except Exception as error:
+                print(f"[job:{job_id}] {type(error).__name__}", flush=True)
+                with jobs_lock:
+                    jobs[job_id].update(status="failed", error_type=type(error).__name__)
+        threading.Thread(target=work, daemon=True, name=f"plan-{job_id[:6]}").start()
+        return job_id
 
     class Handler(BaseHTTPRequestHandler):
         def allowed_host(self):
@@ -46,9 +118,20 @@ def build_handler(*, enable_external: bool = False, actions: dict | None = None)
             if self.path == "/api/options":
                 choices = {key: value for key, value in CHOICES.items() if key in ProfileChoices.model_fields}
                 choices["property_type"] = {"housing": "일반 주택", "officetel": "오피스텔", "other": "기타", "unknown": "미정"}
-                return self.reply(200, {"choices": choices, "defaults": ProfileChoices().model_dump(),
+                return self.reply(200, {"api_version": 2, "choices": choices, "defaults": ProfileChoices().model_dump(),
                                         "number_fields": NUMBER_FIELDS, "number_defaults": NumericInputs().model_dump(), "csrf": token,
                                         "external_enabled": enable_external})
+            if self.path.startswith("/api/plan-jobs/") or self.path.startswith("/api/jobs/"):
+                if not secrets.compare_digest(self.headers.get("X-CSRF-Token", ""), token):
+                    return self.reply(403, {"error": "진행 상태 요청을 확인할 수 없습니다."})
+                prefix = "/api/plan-jobs/" if self.path.startswith("/api/plan-jobs/") else "/api/jobs/"
+                job_id = self.path.removeprefix(prefix)
+                with jobs_lock:
+                    job = deepcopy(jobs.get(job_id))
+                if not job:
+                    return self.reply(404, {"error": "진행 중인 요청을 찾을 수 없습니다."})
+                job.pop("created_at", None)
+                return self.reply(200, job)
             if self.path.startswith("/documents/"):
                 filename = unquote(self.path[len("/documents/"):])
                 root = POLICY_DOCUMENTS.resolve()
@@ -58,7 +141,9 @@ def build_handler(*, enable_external: bool = False, actions: dict | None = None)
                 return self.reply(200, document.read_bytes(), "application/pdf")
             files = {"/": ("index.html", "text/html; charset=utf-8"),
                      "/app.js": ("app.js", "text/javascript; charset=utf-8"),
-                     "/style.css": ("style.css", "text/css; charset=utf-8")}
+                     "/style.css": ("style.css", "text/css; charset=utf-8"),
+                     "/progress.css": ("progress.css", "text/css; charset=utf-8"),
+                     "/dashboard.css": ("dashboard.css", "text/css; charset=utf-8")}
             if self.path not in files:
                 return self.reply(404, {"error": "경로를 찾을 수 없습니다."})
             filename, mime = files[self.path]
@@ -69,7 +154,8 @@ def build_handler(*, enable_external: bool = False, actions: dict | None = None)
             if not self.allowed_host() or self.headers.get("Origin") != f"http://{host}" or not secrets.compare_digest(self.headers.get("X-CSRF-Token", ""), token):
                 return self.reply(403, {"error": "요청 출처를 확인할 수 없습니다. 페이지를 새로고침하세요."})
             name = self.path.removeprefix("/api/")
-            if self.path != f"/api/{name}" or name not in functions:
+            job_actions = {"report-jobs": "report", "policy-jobs": "policies"}
+            if self.path != f"/api/{name}" or (name not in functions and name != "plan-jobs" and name not in job_actions):
                 return self.reply(404, {"error": "알 수 없는 기능입니다."})
             if name != "calculate" and not enable_external:
                 return self.reply(403, {"error": "실제 검색·생성은 --enable-external로 실행한 서버에서만 가능합니다."})
@@ -85,6 +171,24 @@ def build_handler(*, enable_external: bool = False, actions: dict | None = None)
                     raise ValueError("JSON 객체가 필요합니다.")
             except (ValueError, OSError):
                 return self.reply(400, {"error": "입력 JSON을 확인하세요."})
+            if name == "plan-jobs":
+                if not enable_external:
+                    return self.reply(403, {"error": "오프라인 모드에서는 실제 계획을 생성할 수 없습니다."})
+                try:
+                    return self.reply(202, {"job_id": start_plan_job(payload)})
+                except ValidationError:
+                    return self.reply(400, {"error": "선택 항목과 숫자 입력을 확인하세요."})
+                except RuntimeError:
+                    return self.reply(409, {"error": "다른 독립 계획을 만들고 있습니다. 현재 요청이 끝난 뒤 다시 시도해 주세요."})
+            if name in job_actions:
+                if not enable_external:
+                    return self.reply(403, {"error": "오프라인 모드에서는 실제 작업을 실행할 수 없습니다."})
+                try:
+                    return self.reply(202, {"job_id": start_action_job(payload, job_actions[name])})
+                except ValidationError:
+                    return self.reply(400, {"error": "선택 항목과 숫자 입력을 확인하세요."})
+                except RuntimeError:
+                    return self.reply(409, {"error": "다른 작업을 처리하고 있습니다. 완료된 뒤 다시 시도해 주세요."})
             if not lock.acquire(blocking=False):
                 return self.reply(409, {"error": "다른 요청을 처리 중입니다. 완료 후 다시 실행하세요."})
             try:

@@ -1,0 +1,19 @@
+.finance-body{display:grid;gap:20px}
+.finance-status,.compare-grid,.money-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.status-card,.money-card{border:1px solid var(--line);border-radius:11px;padding:14px;background:#fcfdfb;min-width:0}
+.status-card span,.money-card span{display:block;color:var(--muted);font-size:11px;margin-bottom:5px}
+.status-card strong{font-size:13px;line-height:1.5;word-break:keep-all}
+.money-card strong{display:block;font-size:16px;line-height:1.45;overflow-wrap:anywhere}
+.money-card.balance{border-color:#aac9b3;background:var(--soft)}
+.money-card.capacity{border-color:#c7d7ca}
+.money-card.negative{border-color:#d8aaaa;background:#fff6f6;color:#8d3030}
+.cost-compare{border-top:1px solid var(--line);padding-top:17px}
+.cost-compare h3,.finance-note h3{font-size:14px;margin:0 0 10px}
+.finance-note{padding:15px 17px;border-left:3px solid #d2b66e;background:#fffaf0;border-radius:0 8px 8px 0}
+.finance-note p{font-size:12px;margin:0;color:#6e644e}
+.finance-details{font-size:12px;border-top:1px solid var(--line);padding-top:15px}
+.finance-details p{color:var(--muted);margin:8px 0}
+.action-buttons{display:grid;gap:9px}
+.secondary{width:100%;padding:14px 18px;border:1px solid var(--accent);border-radius:10px;background:#fff;color:var(--accent);font-weight:700;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+.secondary:hover{background:var(--soft)}
+@media(max-width:620px){.finance-status,.compare-grid,.money-grid{grid-template-columns:1fr}.result-nav{overflow-x:auto}.result-nav button{white-space:nowrap}}
